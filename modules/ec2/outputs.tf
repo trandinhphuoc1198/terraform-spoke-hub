@@ -1,0 +1,28 @@
+output "master_private_ip" {
+  value = aws_instance.master.private_ip
+}
+
+output "master_public_ip" {
+  description = "Public IP of the master node"
+  value       = aws_instance.master.public_ip
+}
+
+output "master_sg_id" {
+  description = "Security group ID of the master node"
+  value       = aws_security_group.master.id
+}
+
+output "worker_sg_id" {
+  description = "Security group ID shared by all worker nodes (static + ASG)"
+  value       = aws_security_group.worker.id
+}
+
+output "worker_iam_instance_profile_name" {
+  description = "Instance profile name for worker nodes — used by ASG launch template"
+  value       = aws_iam_instance_profile.worker.name
+}
+
+output "ssm_join_token_arn" {
+  description = "ARN of the SSM parameter storing the kubeadm join token"
+  value       = aws_ssm_parameter.cluster_join_token.arn
+}
