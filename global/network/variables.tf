@@ -1,6 +1,7 @@
 variable "region" {
-  type    = string
-  default = "ap-northeast-1"
+  description = "AWS region to deploy the shared Transit Gateway into"
+  type        = string
+  default     = "ap-northeast-1"
 }
 
 variable "env_prefix" {
