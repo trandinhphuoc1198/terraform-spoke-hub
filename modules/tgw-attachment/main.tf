@@ -9,14 +9,14 @@
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
   transit_gateway_id = var.transit_gateway_id
-  vpc_id              = var.vpc_id
-  subnet_ids          = var.attachment_subnet_ids
+  vpc_id             = var.vpc_id
+  subnet_ids         = var.attachment_subnet_ids
 
   # Auto-accept is fine here because both attachments are created by the
   # same AWS account. If hub/spoke ever live in different accounts, switch
   # this to a request/accept pair (aws_ec2_transit_gateway_vpc_attachment_accepter).
   transit_gateway_default_route_table_association = true
-  transit_gateway_default_route_table_propagation  = true
+  transit_gateway_default_route_table_propagation = true
 
   tags = { Name = "${var.env}-tgw-attachment" }
 }

@@ -15,20 +15,20 @@ spoke_vpc_cidrs = ["10.1.0.0/16"]
 # Smaller than the spoke — this cluster only needs to run Argo CD.
 master_instance_type = "t3.medium"
 worker_instance_type = "t3.small"
-key_name              = "key"
-master_private_ip     = "10.0.1.10"
+key_name             = "key"
+master_private_ip    = "10.0.1.10"
 
-worker_min     = 1
-worker_max     = 3
-worker_desired = 2
+worker_min         = 1
+worker_max         = 3
+worker_desired     = 2
 worker_volume_size = 17
 
 k8s_version = "1.29"
 pod_cidr    = "192.168.0.0/16"
 
 https_nodeport       = 30443
-certificate_arn       = "arn:aws:acm:ap-northeast-1:633825695180:certificate/7cdd7b32-e304-4cee-989f-eb5b7cb08c34"
-argocd_chart_version  = "" # pin e.g. "7.7.11" once you've tested an upgrade
+certificate_arn      = "arn:aws:acm:ap-northeast-1:633825695180:certificate/7cdd7b32-e304-4cee-989f-eb5b7cb08c34"
+argocd_chart_version = "" # pin e.g. "7.7.11" once you've tested an upgrade
 
 apps = {
   argocd = {

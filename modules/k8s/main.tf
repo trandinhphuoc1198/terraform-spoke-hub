@@ -141,7 +141,7 @@ locals {
     echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
     kubectl wait node --all --for=condition=Ready --timeout=300s
 
-    %{ if var.install_argocd ~}
+    %{if var.install_argocd~}
     # ── Argo CD (hub only) ────────────────────────────────────────────────────
     # This is the ONLY application-layer thing Terraform installs, because the
     # hub cluster's entire purpose is to run it. Actual Application / AppProject
@@ -153,11 +153,11 @@ locals {
     helm upgrade --install argocd argo/argo-cd \
       --namespace ${var.argocd_namespace} \
       --create-namespace \
-      %{ if var.argocd_chart_version != "" ~}
+      %{if var.argocd_chart_version != ""~}
       --version "${var.argocd_chart_version}" \
-      %{ endif ~}
+      %{endif~}
       --set configs.params."server\.insecure"=true
-    %{ endif ~}
+    %{endif~}
 
     # ── Upload raw join command to SSM (workers parse it themselves) ──────────
     echo "=== Pushing join command to SSM ===" >> /var/log/kubeadm-init.log

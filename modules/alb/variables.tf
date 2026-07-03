@@ -1,9 +1,9 @@
-variable "env"               { type = string }
-variable "vpc_id"            { type = string }
+variable "env" { type = string }
+variable "vpc_id" { type = string }
 variable "public_subnet_ids" { type = list(string) }
-variable "worker_sg_id"      { type = string }
-variable "asg_name"          { type = string }
-variable "certificate_arn"   { type = string }
+variable "worker_sg_id" { type = string }
+variable "asg_name" { type = string }
+variable "certificate_arn" { type = string }
 
 variable "https_nodeport" {
   description = "NodePort the NGINX Ingress controller exposes for HTTPS"

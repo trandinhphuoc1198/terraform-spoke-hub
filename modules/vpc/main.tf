@@ -88,7 +88,7 @@ resource "aws_instance" "nat" {
               systemctl start iptables
               EOF
 
-  tags = { Name = "${var.env}-nat-instance" }
+  tags       = { Name = "${var.env}-nat-instance" }
   depends_on = [aws_internet_gateway.igw]
 }
 
@@ -134,7 +134,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  tags = { Name = "${var.env}-private-rt" }
+  tags   = { Name = "${var.env}-private-rt" }
 }
 
 resource "aws_route" "private_default" {

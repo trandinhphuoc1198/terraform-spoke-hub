@@ -5,6 +5,6 @@ variable "private_subnet_cidrs" { type = list(string) }
 variable "region" { type = string }
 
 variable "nat_instance_type" {
-	type    = string
-	default = "t3.small"
+  type    = string
+  default = "t3.small"
 }

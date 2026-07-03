@@ -12,8 +12,8 @@ hub_vpc_cidr = "10.0.0.0/16"
 
 master_instance_type = "c7i-flex.large"
 worker_instance_type = "t3.small"
-key_name              = "key"
-master_private_ip     = "10.1.1.10"
+key_name             = "key"
+master_private_ip    = "10.1.1.10"
 
 worker_min         = 1
 worker_max         = 6
@@ -23,8 +23,8 @@ worker_volume_size = 17
 k8s_version = "1.29"
 pod_cidr    = "192.168.0.0/16"
 
-https_nodeport   = 30443
-certificate_arn  = "arn:aws:acm:ap-northeast-1:633825695180:certificate/7cdd7b32-e304-4cee-989f-eb5b7cb08c34"
+https_nodeport  = 30443
+certificate_arn = "arn:aws:acm:ap-northeast-1:633825695180:certificate/7cdd7b32-e304-4cee-989f-eb5b7cb08c34"
 
 bucket_names = [
   "tempo-s3-phuoctd6",

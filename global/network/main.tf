@@ -7,9 +7,9 @@
 # transit_gateway_id via a terraform_remote_state data source.
 
 resource "aws_ec2_transit_gateway" "main" {
-  description                    = "Hub-spoke TGW for ${var.env_prefix} Kubernetes clusters"
-  amazon_side_asn                = var.amazon_side_asn
-  auto_accept_shared_attachments = "disable"
+  description                     = "Hub-spoke TGW for ${var.env_prefix} Kubernetes clusters"
+  amazon_side_asn                 = var.amazon_side_asn
+  auto_accept_shared_attachments  = "disable"
   default_route_table_association = "enable"
   default_route_table_propagation = "enable"
 
