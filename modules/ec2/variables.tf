@@ -12,6 +12,11 @@ variable "master_private_ip" {
   default = null
 }
 
+variable "ami_id" {
+  description = "AMI ID for the master node — the shared Packer-built k8s base image (see /packer and modules/ami). Replaces the previous dynamic SSM AL2023 lookup."
+  type        = string
+}
+
 variable "trusted_api_cidr_blocks" {
   description = <<-EOT
     CIDR blocks allowed to reach the kube-apiserver (port 6443) in addition

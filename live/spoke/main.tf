@@ -43,6 +43,12 @@ resource "null_resource" "wait_for_nat" {
   }
 }
 
+# ── Baked k8s base AMI (built by Packer + Ansible — see /packer) ─────────────
+# Shared by both the master (module.ec2) and workers (module.asg) below.
+module "ami" {
+  source = "../../modules/ami"
+}
+
 # ── Transit Gateway attachment — connects this VPC to the hub VPC ────────────
 module "tgw_attachment" {
   source                = "../../modules/tgw-attachment"
@@ -77,6 +83,7 @@ module "ec2" {
   alb_sg_id            = module.alb.alb_sg_id
   k8s_bootstrap        = module.k8s.master_userdata
   cluster_name         = var.cluster_name
+  ami_id               = module.ami.ami_id
   # Lets the hub's Argo CD reach this cluster's kube-apiserver over the TGW
   # to register it as a remote cluster and start syncing workloads.
   trusted_api_cidr_blocks = [var.hub_vpc_cidr]
@@ -98,6 +105,7 @@ module "asg" {
   worker_max                       = var.worker_max
   worker_desired                   = var.worker_desired
   worker_volume_size               = var.worker_volume_size
+  ami_id                           = module.ami.ami_id
 
   depends_on = [module.vpc, null_resource.wait_for_nat]
 }

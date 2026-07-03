@@ -1,8 +1,12 @@
 # Renders kubeadm bootstrap scripts passed into EC2 user_data.
 #
-# Every master (hub AND every spoke) gets: kubeadm init, CNI, and CCM —
-# these three are what "makes the cluster alive" and none of them can be
-# installed by Argo CD, since nothing schedules until they're running.
+# containerd, kubeadm, kubelet, kubectl, swap-disable, kernel modules, and
+# sysctl prep are now baked into the AMI at build time by Packer + Ansible
+# (see /packer at the repo root and modules/ami). This module's user_data
+# only handles what must happen at instance-launch time: kubeadm init/join,
+# CNI, AWS CCM, and — hub only — Argo CD, none of which can be baked ahead
+# of time since they depend on per-instance identity or coordination
+# between the master and workers.
 #
 # Only the hub master additionally installs Argo CD itself (install_argocd
 # = true). Spokes never install Argo CD — they are only ever *managed by*
@@ -18,49 +22,6 @@ locals {
     #!/bin/bash
     set -euo pipefail
     exec > >(tee /var/log/k8s-bootstrap.log) 2>&1
-
-    # ── Install utilities ─────────────────────────────────────────────────────
-    yum install -y jq
-
-    # ── Disable swap ──────────────────────────────────────────────────────────
-    swapoff -a
-    sed -i '/ swap / s/^/#/' /etc/fstab
-
-    # ── Kernel modules required by containerd / k8s ───────────────────────────
-    sudo modprobe br_netfilter
-    cat <<EOF > /etc/modules-load.d/k8s.conf
-    overlay
-    br_netfilter
-    EOF
-    modprobe overlay
-    modprobe br_netfilter
-
-    cat <<EOF > /etc/sysctl.d/k8s.conf
-    net.bridge.bridge-nf-call-iptables  = 1
-    net.bridge.bridge-nf-call-ip6tables = 1
-    net.ipv4.ip_forward                 = 1
-    EOF
-    sysctl --system
-
-    # ── containerd ────────────────────────────────────────────────────────────
-    yum install -y containerd
-    mkdir -p /etc/containerd
-    containerd config default > /etc/containerd/config.toml
-    sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-    systemctl enable --now containerd
-
-    # ── kubeadm / kubelet / kubectl ───────────────────────────────────────────
-    cat <<EOF > /etc/yum.repos.d/kubernetes.repo
-    [kubernetes]
-    name=Kubernetes
-    baseurl=https://pkgs.k8s.io/core:/stable:/v${var.k8s_version}/rpm/
-    enabled=1
-    gpgcheck=1
-    gpgkey=https://pkgs.k8s.io/core:/stable:/v${var.k8s_version}/rpm/repodata/repomd.xml.key
-    EOF
-
-    yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
-    systemctl enable --now kubelet
   COMMON
 
   master_init = <<-MASTER

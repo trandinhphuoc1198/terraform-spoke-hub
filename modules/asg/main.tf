@@ -4,15 +4,14 @@
 #   k8s.io/cluster-autoscaler/enabled
 #   k8s.io/cluster-autoscaler/<cluster-name>
 
-# Queries the official AWS SSM path for the latest standard AL2023 AMI ID
-data "aws_ssm_parameter" "amazon_linux_2023" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-default-x86_64"
-}
-
 # ── Launch Template ────────────────────────────────────────────────────────────
 resource "aws_launch_template" "worker" {
-  name_prefix   = "${var.env}-k8s-worker-"
-  image_id      = data.aws_ssm_parameter.amazon_linux_2023.value
+  name_prefix = "${var.env}-k8s-worker-"
+  # AMI is the shared, Packer-built k8s base image (containerd/kubeadm/
+  # kubelet/kubectl + node prep baked in) — see /packer and modules/ami.
+  # Same image the master (modules/ec2) launches from. No dynamic SSM
+  # lookup here anymore.
+  image_id      = var.ami_id
   instance_type = var.worker_instance_type
   key_name      = var.key_name
 
@@ -80,6 +79,7 @@ resource "aws_autoscaling_group" "workers" {
   }
 
   # Instance refresh — rolling update when launch template changes
+  # (including when a new Packer-built AMI shows up via modules/ami).
   instance_refresh {
     strategy = "Rolling"
     preferences {

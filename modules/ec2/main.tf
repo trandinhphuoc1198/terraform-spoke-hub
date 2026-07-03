@@ -1,8 +1,3 @@
-# Queries the official AWS SSM path for the latest standard AL2023 AMI ID
-data "aws_ssm_parameter" "amazon_linux_2023" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-default-x86_64"
-}
-
 # ── SSM Parameter for Join Token ──────────────────────────────────────────────
 resource "aws_ssm_parameter" "cluster_join_token" {
   name        = "/${var.env}/k8s/join_token"
@@ -334,7 +329,11 @@ resource "aws_iam_instance_profile" "worker" {
 
 # ── Master node ────────────────────────────────────────────────────────────────
 resource "aws_instance" "master" {
-  ami                         = data.aws_ssm_parameter.amazon_linux_2023.value
+  # AMI is the shared, Packer-built k8s base image (containerd/kubeadm/
+  # kubelet/kubectl + node prep baked in) — see /packer and modules/ami.
+  # No dynamic SSM lookup here anymore, so both this instance and every
+  # worker launched by modules/asg come from the exact same image.
+  ami                         = var.ami_id
   instance_type               = var.master_instance_type
   subnet_id                   = var.public_subnet_ids[0]
   private_ip                  = var.master_private_ip

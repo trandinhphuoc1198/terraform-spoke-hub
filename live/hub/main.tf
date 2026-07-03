@@ -63,6 +63,12 @@ resource "null_resource" "wait_for_nat" {
   }
 }
 
+# ── Baked k8s base AMI (built by Packer + Ansible — see /packer) ─────────────
+# Shared by both the master (module.ec2) and workers (module.asg) below.
+module "ami" {
+  source = "../../modules/ami"
+}
+
 # ── Transit Gateway attachment — connects this VPC to every spoke VPC ────────
 module "tgw_attachment" {
   source                = "../../modules/tgw-attachment"
@@ -98,6 +104,7 @@ module "ec2" {
   alb_sg_id            = module.alb.alb_sg_id
   k8s_bootstrap        = module.k8s.master_userdata
   cluster_name         = var.cluster_name
+  ami_id               = module.ami.ami_id
   # Nothing needs to call INTO the hub's apiserver from a spoke — spokes are
   # registered by the hub calling OUT to them — so no trusted CIDR needed here.
 }
@@ -117,6 +124,7 @@ module "asg" {
   worker_max                       = var.worker_max
   worker_desired                   = var.worker_desired
   worker_volume_size               = var.worker_volume_size
+  ami_id                           = module.ami.ami_id
 
   depends_on = [module.vpc, null_resource.wait_for_nat]
 }
