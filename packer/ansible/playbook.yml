@@ -16,22 +16,22 @@
 
   tasks:
     - name: Install base utilities
-      dnf:
+      ansible.builtin.dnf:
         name: jq
         state: present
 
     - name: Disable swap now
-      command: swapoff -a
+      ansible.builtin.command: swapoff -a
       changed_when: true
 
     - name: Comment out swap entries in fstab
-      replace:
+      ansible.builtin.replace:
         path: /etc/fstab
         regexp: '^([^#].*\sswap\s.*)$'
         replace: '#\1'
 
     - name: Load overlay/br_netfilter kernel modules on every boot
-      copy:
+      ansible.builtin.copy:
         dest: /etc/modules-load.d/k8s.conf
         content: |
           overlay
@@ -47,7 +47,7 @@
         - br_netfilter
 
     - name: Kubernetes-required sysctl params
-      copy:
+      ansible.builtin.copy:
         dest: /etc/sysctl.d/k8s.conf
         content: |
           net.bridge.bridge-nf-call-iptables  = 1
@@ -56,39 +56,39 @@
         mode: "0644"
 
     - name: Apply sysctl params
-      command: sysctl --system
+      ansible.builtin.command: sysctl --system
       changed_when: true
 
     - name: Install containerd
-      dnf:
+      ansible.builtin.dnf:
         name: containerd
         state: present
 
     - name: Ensure /etc/containerd exists
-      file:
+      ansible.builtin.file:
         path: /etc/containerd
         state: directory
         mode: "0755"
 
     - name: Generate default containerd config (only if absent)
-      shell: containerd config default > /etc/containerd/config.toml
+      ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
       args:
         creates: /etc/containerd/config.toml
 
     - name: Enable SystemdCgroup in containerd config
-      replace:
+      ansible.builtin.replace:
         path: /etc/containerd/config.toml
         regexp: "SystemdCgroup = false"
         replace: "SystemdCgroup = true"
 
     - name: Enable and start containerd
-      systemd:
+      ansible.builtin.systemd:
         name: containerd
         enabled: true
         state: started
 
     - name: Add Kubernetes yum repo
-      yum_repository:
+      ansible.builtin.yum_repository:
         name: kubernetes
         description: Kubernetes
         baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/rpm/"
@@ -97,7 +97,7 @@
         gpgkey: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/rpm/repodata/repomd.xml.key"
 
     - name: Install kubelet, kubeadm, kubectl
-      dnf:
+      ansible.builtin.dnf:
         name:
           - kubelet
           - kubeadm
@@ -106,7 +106,7 @@
         disable_excludes: kubernetes
 
     - name: Enable kubelet
-      systemd:
+      ansible.builtin.systemd:
         name: kubelet
         enabled: true
         state: started
