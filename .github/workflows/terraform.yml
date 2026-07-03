@@ -1,0 +1,76 @@
+name: terraform-ci
+
+on:
+  pull_request:
+    paths:
+      - "**/*.tf"
+      - "**/*.tfvars"
+      - ".tflint.hcl"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+jobs:
+  fmt-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+      - name: terraform fmt (check only, no changes)
+        run: terraform fmt -recursive -check -diff
+
+  # validate + tflint run per-root, since each root has its own providers/
+  # backend and `terraform validate` needs an `init` first. global/network
+  # and each live/* directory are validated independently.
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        root: [global/network, live/hub, live/spoke]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      # backend=false: this job never needs real AWS credentials or state,
+      # it only checks that the config is internally consistent.
+      - name: terraform init (no backend)
+        working-directory: ${{ matrix.root }}
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        working-directory: ${{ matrix.root }}
+        run: terraform validate
+
+  tflint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        root: [global/network, live/hub, live/spoke]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: "v0.53.0"
+      - run: tflint --init
+        working-directory: ${{ matrix.root }}
+      - run: tflint --config ${{ github.workspace }}/.tflint.hcl
+        working-directory: ${{ matrix.root }}
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          # Both known, accepted trade-offs, documented in the root README:
+          # AVD-AWS-0057 (wildcard on EC2 Describe* — IAM has no
+          # resource-level permission for these actions) and the local-exec
+          # NAT-readiness provisioner findings.
+          additional_args: --exclude AVD-AWS-0057

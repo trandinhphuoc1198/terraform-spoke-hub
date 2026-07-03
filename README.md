@@ -40,26 +40,30 @@ Terraform's job stops at "clusters exist, are networked together, and are alive"
 
 ## Apply order (first time)
 
-Hub and spoke each need the *other's* VPC CIDR (for TGW routing and for the hub's Argo CD to reach the spoke's apiserver). To avoid a circular `terraform_remote_state` dependency, these CIDRs are **plain tfvars you choose up front** (see `hub_vpc_cidr` / `spoke_vpc_cidrs` in each `envs/dev/terraform.tfvars`) — not looked up dynamically. Just make sure they don't overlap and match each other correctly across the two tfvars files.
+Hub and spoke each need the *other's* VPC CIDR (for TGW routing and for the hub's Argo CD to reach the spoke's apiserver). To avoid a circular `terraform_remote_state` dependency, these CIDRs are **plain tfvars you choose up front** (see `hub_vpc_cidr` / `spoke_vpc_cidrs` in each `envs/dev/terraform.tfvars`) — not looked up dynamically. Just make sure they don't overlap and match each other correctly across the two tfvars files. (A `check` block in each root's `main.tf` verifies this automatically at `plan`/`apply` time — see "CIDR overlap detection" below.)
+
+Every root's `key` is passed at `init` time, not hardcoded in `backend.tf`, so the same `.tf` files work for every environment:
 
 ```bash
 # 1. Shared Transit Gateway
 cd global/network
-terraform init
+terraform init -backend-config="envs/dev/backend.hcl"
 terraform apply -var="env_prefix=dev"
 
 # 2. Spoke (workload cluster)
 cd ../../live/spoke
-terraform init
+terraform init -backend-config="envs/dev/backend.hcl"
 terraform apply -var-file="envs/dev/terraform.tfvars"
 
 # 3. Hub (Argo CD cluster)
 cd ../hub
-terraform init
+terraform init -backend-config="envs/dev/backend.hcl"
 terraform apply -var-file="envs/dev/terraform.tfvars"
 ```
 
-Order between step 2 and 3 doesn't actually matter — both roots use static CIDRs, not each other's live outputs — but applying the TGW first is required since both roots read `global/network`'s state.
+Order between step 2 and 3 doesn't actually matter — both roots use static CIDRs, not each other's live outputs — but applying the TGW first is required since both roots read `global/network`'s state (via `network_state_key`, itself a tfvar so it can point at a different `global/network` env if you ever split that too).
+
+Adding `prod`: create `envs/prod/terraform.tfvars` and `envs/prod/backend.hcl` (with `key = "hub/prod/terraform.tfstate"` etc.) in each root — no `.tf` file changes needed.
 
 ## Day-2: registering the spoke with the hub's Argo CD
 
@@ -89,3 +93,17 @@ This creates a `Secret` (type `argocd.argoproj.io/secret-type: cluster`) in the 
 | Argo CD host on the workload cluster's ALB | Argo CD host moved to the hub's own ALB |
 | CNI installed indirectly via an external `k8s_ArgoCD` git repo's `init.sh` | CNI installed directly by the `k8s` module (`cni_manifest_url`, defaults to Calico) — Terraform no longer depends on an external app repo to make the cluster alive |
 | Single VPC, single state | Two VPCs + shared Transit Gateway, two independent state files, plus a `global/network` state for the TGW |
+
+## Best-practices fixes applied
+
+- **Partial backend config** — `backend.tf` no longer hardcodes `key`; it's passed via `-backend-config="envs/<env>/backend.hcl"` at `init` time. Same `.tf` files now work across `dev`/`prod`/any future env without editing code.
+- **CIDR validation** — every CIDR variable validates its format (`can(cidrnetmask(...))`), and a `check` block in each root does real numeric-range overlap detection between `vpc_cidr`/`hub_vpc_cidr`/`spoke_vpc_cidrs`, catching a copy-pasted duplicate CIDR at `plan` time instead of a failed TGW route deep in `apply`.
+- **IAM least privilege** — the CCM policy's mutating actions (`CreateTags`, `AuthorizeSecurityGroupIngress`, etc.) are now conditioned on `aws:ResourceTag/kubernetes.io/cluster/<name> = owned`, so this role can't touch another cluster's security groups even if one exists in the same account. Worker S3 access is scoped to the actual bucket ARNs (`module.s3.bucket_arns`) instead of `Resource: "*"`. Note: `ec2:Describe*` actions are still `Resource: "*"` — that's an AWS IAM limitation (these actions don't support resource-level permissions at all), not something left un-scoped by choice.
+- **Provisioner hardening** — the `local-exec` NAT-readiness wait now has `on_failure = continue` and documents exactly why it exists (Terraform has no native "wait for EC2 status check" resource) so a missing AWS CLI/permission on the runner degrades gracefully instead of blocking the whole apply.
+- **CI** — `.github/workflows/terraform.yml` runs `terraform fmt -check`, `terraform validate`, `tflint`, and `tfsec` against every root on each PR.
+
+## Known, intentional trade-offs (not fixed — by design)
+
+- **Local-path module sources** (`source = "../../modules/vpc"`) rather than a versioned Git/registry reference. Correct for a single monorepo where hub, spoke, and modules all change together in one PR. If modules ever move to their own repo consumed by multiple independent repos, switch to `source = "git::https://github.com/<org>/terraform-modules.git//vpc?ref=v1.2.0"` so consumers can upgrade on their own schedule.
+- **`ec2:Describe*` stays `Resource: "*"`** in the CCM policy — see IAM note above, this is an AWS API limitation, not a Terraform gap.
+

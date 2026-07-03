@@ -22,3 +22,9 @@ variable "trusted_api_cidr_blocks" {
   type        = list(string)
   default     = []
 }
+
+variable "s3_bucket_arns" {
+  description = "ARNs of S3 buckets the worker IAM role should be able to read/write. Leave empty (default) if this cluster has no S3-backed workloads — e.g. the hub."
+  type        = list(string)
+  default     = []
+}

@@ -3,7 +3,6 @@ terraform {
 
   backend "s3" {
     bucket       = "terraform-state-phuoctd6"
-    key          = "global/network/terraform.tfstate"
     region       = "ap-northeast-1"
     use_lockfile = true
     encrypt      = true

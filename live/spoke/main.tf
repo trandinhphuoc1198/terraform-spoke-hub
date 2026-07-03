@@ -1,3 +1,24 @@
+# ── CIDR overlap guard ─────────────────────────────────────────────────────
+# See live/hub/main.tf for why this exists — same logic, mirrored here.
+locals {
+  cidr_ranges = {
+    for c in [var.vpc_cidr, var.hub_vpc_cidr] : c => {
+      start = sum([for i, o in split(".", cidrhost(c, 0)) : tonumber(o) * pow(256, 3 - i)])
+      end   = sum([for i, o in split(".", cidrhost(c, 0)) : tonumber(o) * pow(256, 3 - i)]) + pow(2, 32 - tonumber(split("/", c)[1])) - 1
+    }
+  }
+}
+
+check "no_cidr_overlap" {
+  assert {
+    condition = !(
+      local.cidr_ranges[var.vpc_cidr].start <= local.cidr_ranges[var.hub_vpc_cidr].end &&
+      local.cidr_ranges[var.hub_vpc_cidr].start <= local.cidr_ranges[var.vpc_cidr].end
+    )
+    error_message = "vpc_cidr (${var.vpc_cidr}) and hub_vpc_cidr (${var.hub_vpc_cidr}) overlap — they must be disjoint for TGW routing to work."
+  }
+}
+
 # ── VPC ───────────────────────────────────────────────────────────────────────
 module "vpc" {
   source               = "../../modules/vpc"
@@ -11,8 +32,14 @@ module "vpc" {
 resource "null_resource" "wait_for_nat" {
   depends_on = [module.vpc]
 
+  triggers = {
+    nat_instance_id = module.vpc.nat_instance_id
+  }
+
+  # See live/hub/main.tf for the rationale on this provisioner.
   provisioner "local-exec" {
-    command = "aws ec2 wait instance-status-ok --instance-ids ${module.vpc.nat_instance_id}"
+    command     = "aws ec2 wait instance-status-ok --instance-ids ${module.vpc.nat_instance_id} --region ${var.region}"
+    on_failure  = continue
   }
 }
 
@@ -53,6 +80,7 @@ module "ec2" {
   # Lets the hub's Argo CD reach this cluster's kube-apiserver over the TGW
   # to register it as a remote cluster and start syncing workloads.
   trusted_api_cidr_blocks   = [var.hub_vpc_cidr]
+  s3_bucket_arns            = module.s3.bucket_arns
 }
 
 # ── ASG: worker node Auto Scaling Group ───────────────────────────────────────

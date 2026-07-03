@@ -1,3 +1,45 @@
+# ── CIDR overlap guard ─────────────────────────────────────────────────────
+# Terraform has no built-in "do these CIDRs overlap" function, so this
+# converts each CIDR to a numeric [start, end] range and compares pairs.
+# Runs at plan time — catches the classic "copy-pasted the same /16 twice"
+# mistake before it fails deep inside a TGW route apply.
+locals {
+  cidr_ranges = {
+    for c in concat([var.vpc_cidr], var.spoke_vpc_cidrs) : c => {
+      start = sum([for i, o in split(".", cidrhost(c, 0)) : tonumber(o) * pow(256, 3 - i)])
+      end   = sum([for i, o in split(".", cidrhost(c, 0)) : tonumber(o) * pow(256, 3 - i)]) + pow(2, 32 - tonumber(split("/", c)[1])) - 1
+    }
+  }
+
+  cidr_pairs = [
+    for pair in setproduct(keys(local.cidr_ranges), keys(local.cidr_ranges)) :
+    pair if pair[0] < pair[1]
+  ]
+
+  overlapping_pairs = [
+    for pair in local.cidr_pairs :
+    pair if local.cidr_ranges[pair[0]].start <= local.cidr_ranges[pair[1]].end
+      && local.cidr_ranges[pair[1]].start <= local.cidr_ranges[pair[0]].end
+  ]
+}
+
+check "no_cidr_overlap" {
+  assert {
+    condition     = length(local.overlapping_pairs) == 0
+    error_message = "Overlapping CIDRs detected: ${jsonencode(local.overlapping_pairs)}. vpc_cidr and every entry in spoke_vpc_cidrs must be disjoint for TGW routing to work."
+  }
+}
+
+check "no_duplicate_cidrs" {
+  assert {
+    # local.cidr_ranges is keyed by CIDR string, so an exact duplicate
+    # collapses into one map entry and would otherwise hide itself from
+    # the pairwise overlap check above.
+    condition     = length(local.cidr_ranges) == length(concat([var.vpc_cidr], var.spoke_vpc_cidrs))
+    error_message = "vpc_cidr and spoke_vpc_cidrs contain an exact duplicate CIDR — each cluster needs a distinct VPC CIDR."
+  }
+}
+
 # ── VPC ───────────────────────────────────────────────────────────────────────
 module "vpc" {
   source               = "../../modules/vpc"
@@ -11,8 +53,13 @@ module "vpc" {
 resource "null_resource" "wait_for_nat" {
   depends_on = [module.vpc]
 
+  triggers = {
+    nat_instance_id = module.vpc.nat_instance_id
+  }
+
   provisioner "local-exec" {
-    command = "aws ec2 wait instance-status-ok --instance-ids ${module.vpc.nat_instance_id}"
+    command     = "aws ec2 wait instance-status-ok --instance-ids ${module.vpc.nat_instance_id} --region ${var.region}"
+    on_failure  = continue
   }
 }
 

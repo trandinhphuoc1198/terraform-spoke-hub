@@ -179,10 +179,17 @@ resource "aws_iam_role_policy" "master_ccm_policy" {
   name = "${var.env}-k8s-master-ccm-policy"
   role = aws_iam_role.master.id
 
+  # NOTE ON SCOPING: EC2's Describe* actions don't support resource-level
+  # permissions at all (AWS IAM limitation, not something Terraform/HCL can
+  # work around) — Resource "*" is unavoidable for those. The *mutating*
+  # actions below ARE scoped: they're conditioned on the resource carrying
+  # this cluster's ownership tag, so this role can't touch security groups
+  # or instances belonging to a different cluster in the same account.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "ReadOnlyDescribe"
         Effect = "Allow"
         Action = [
           "ec2:DescribeInstances",
@@ -191,16 +198,38 @@ resource "aws_iam_role_policy" "master_ccm_policy" {
           "ec2:DescribeSecurityGroups",
           "ec2:DescribeSubnets",
           "ec2:DescribeVolumes",
-          "ec2:CreateSecurityGroup",
-          "ec2:CreateTags",
-          "ec2:DeleteSecurityGroup",
-          "ec2:ModifyInstanceAttribute",
-          "ec2:AuthorizeSecurityGroupIngress",
-          "ec2:RevokeSecurityGroupIngress",
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeInstanceTopology"
         ]
         Resource = "*"
+      },
+      {
+        Sid      = "CreateSecurityGroupTaggedForThisCluster"
+        Effect   = "Allow"
+        Action   = "ec2:CreateSecurityGroup"
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+          }
+        }
+      },
+      {
+        Sid    = "MutateOnlyResourcesTaggedForThisCluster"
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateTags",
+          "ec2:DeleteSecurityGroup",
+          "ec2:ModifyInstanceAttribute",
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupIngress"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+          }
+        }
       }
     ]
   })
@@ -233,32 +262,43 @@ resource "aws_iam_role_policy" "worker_ebs" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "EBSForPVC"
-        Effect = "Allow"
-        Action = [
-          "ec2:AttachVolume", "ec2:CreateVolume", "ec2:DeleteVolume",
-          "ec2:DetachVolume", "ec2:DescribeVolumes", "ec2:DescribeVolumeStatus",
-          "ec2:DescribeInstances", "ec2:CreateSnapshot", "ec2:DeleteSnapshot",
-          "ec2:DescribeSnapshots", "ec2:CreateTags", "ec2:ModifyVolume",
-          "ec2:DescribeAvailabilityZones"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid      = "S3Access"
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
-        Resource = "*"
-      },
-      {
-        Sid      = "SSMReadToken"
-        Effect   = "Allow"
-        Action   = ["ssm:GetParameter"]
-        Resource = aws_ssm_parameter.cluster_join_token.arn
-      }
-    ]
+    Statement = concat(
+      [
+        {
+          Sid    = "EBSForPVC"
+          Effect = "Allow"
+          Action = [
+            "ec2:AttachVolume", "ec2:CreateVolume", "ec2:DeleteVolume",
+            "ec2:DetachVolume", "ec2:DescribeVolumes", "ec2:DescribeVolumeStatus",
+            "ec2:DescribeInstances", "ec2:CreateSnapshot", "ec2:DeleteSnapshot",
+            "ec2:DescribeSnapshots", "ec2:CreateTags", "ec2:ModifyVolume",
+            "ec2:DescribeAvailabilityZones"
+          ]
+          Resource = "*"
+        },
+        {
+          Sid      = "SSMReadToken"
+          Effect   = "Allow"
+          Action   = ["ssm:GetParameter"]
+          Resource = aws_ssm_parameter.cluster_join_token.arn
+        }
+      ],
+      # S3 access is scoped to the specific buckets this cluster owns,
+      # passed in from the root module — never a account-wide wildcard.
+      # If no buckets are passed (e.g. the hub cluster), this statement
+      # is simply omitted rather than falling back to Resource "*".
+      length(var.s3_bucket_arns) > 0 ? [
+        {
+          Sid    = "S3Access"
+          Effect = "Allow"
+          Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+          Resource = flatten([
+            var.s3_bucket_arns,
+            [for arn in var.s3_bucket_arns : "${arn}/*"]
+          ])
+        }
+      ] : []
+    )
   })
 }
 

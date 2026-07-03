@@ -9,6 +9,12 @@ variable "region" {
   default = "ap-northeast-1"
 }
 
+variable "network_state_key" {
+  description = "S3 key of the global/network state for this environment"
+  type        = string
+  default     = "global/network/dev/terraform.tfstate"
+}
+
 variable "cluster_name" {
   type = string
 }
@@ -16,6 +22,10 @@ variable "cluster_name" {
 # ── Network ───────────────────────────────────────────────────────────────────
 variable "vpc_cidr" {
   type = string
+  validation {
+    condition     = can(cidrnetmask(var.vpc_cidr))
+    error_message = "vpc_cidr must be a valid CIDR block, e.g. 10.1.0.0/16."
+  }
 }
 
 variable "public_subnet_cidrs" {
@@ -31,6 +41,10 @@ variable "private_subnet_cidrs" {
 # cluster's kube-apiserver.
 variable "hub_vpc_cidr" {
   type = string
+  validation {
+    condition     = can(cidrnetmask(var.hub_vpc_cidr))
+    error_message = "hub_vpc_cidr must be a valid CIDR block, e.g. 10.0.0.0/16."
+  }
 }
 
 # ── EC2 / Master ──────────────────────────────────────────────────────────────

@@ -9,6 +9,12 @@ variable "region" {
   default = "ap-northeast-1"
 }
 
+variable "network_state_key" {
+  description = "S3 key of the global/network state for this environment"
+  type        = string
+  default     = "global/network/dev/terraform.tfstate"
+}
+
 variable "cluster_name" {
   description = "K8s cluster name — must match the ASG discovery tag value"
   type        = string
@@ -17,6 +23,10 @@ variable "cluster_name" {
 # ── Network ───────────────────────────────────────────────────────────────────
 variable "vpc_cidr" {
   type = string
+  validation {
+    condition     = can(cidrnetmask(var.vpc_cidr))
+    error_message = "vpc_cidr must be a valid CIDR block, e.g. 10.0.0.0/16."
+  }
 }
 
 variable "public_subnet_cidrs" {
@@ -33,6 +43,11 @@ variable "private_subnet_cidrs" {
 variable "spoke_vpc_cidrs" {
   type    = list(string)
   default = []
+
+  validation {
+    condition     = alltrue([for c in var.spoke_vpc_cidrs : can(cidrnetmask(c))])
+    error_message = "Every entry in spoke_vpc_cidrs must be a valid CIDR block."
+  }
 }
 
 # ── EC2 / Master ──────────────────────────────────────────────────────────────
