@@ -1,12 +1,13 @@
 # ── General ───────────────────────────────────────────────────────────────────
 variable "env" {
-  description = "Cluster name for this root, e.g. \"hub-dev\""
+  description = "Cluster name for this root, e.g. \"spoke-dev\""
   type        = string
 }
 
 variable "region" {
-  type    = string
-  default = "ap-northeast-1"
+  description = "AWS region to deploy this cluster into"
+  type        = string
+  default     = "ap-northeast-1"
 }
 
 variable "network_state_key" {
@@ -22,7 +23,8 @@ variable "cluster_name" {
 
 # ── Network ───────────────────────────────────────────────────────────────────
 variable "vpc_cidr" {
-  type = string
+  description = "CIDR block for this spoke's VPC (e.g. 10.1.0.0/16)"
+  type        = string
   validation {
     condition     = can(cidrnetmask(var.vpc_cidr))
     error_message = "vpc_cidr must be a valid CIDR block, e.g. 10.0.0.0/16."
@@ -30,93 +32,97 @@ variable "vpc_cidr" {
 }
 
 variable "public_subnet_cidrs" {
-  type = list(string)
+  description = "One CIDR per public subnet (must be within vpc_cidr)"
+  type        = list(string)
 }
 
 variable "private_subnet_cidrs" {
-  type = list(string)
+  description = "One CIDR per private subnet (must be within vpc_cidr)"
+  type        = list(string)
 }
 
-# CIDR of the spoke VPC(s) this hub needs a TGW route + apiserver access to.
-# Static, chosen up front — avoids a circular remote-state dependency between
-# the two roots. Add one entry per spoke as you bring more online.
-variable "spoke_vpc_cidrs" {
-  type    = list(string)
-  default = []
-
+variable "hub_vpc_cidr" {
+  description = "CIDR of the hub VPC — used for the TGW route and to allow the hub's Argo CD to reach this cluster's kube-apiserver"
+  type        = string
   validation {
-    condition     = alltrue([for c in var.spoke_vpc_cidrs : can(cidrnetmask(c))])
-    error_message = "Every entry in spoke_vpc_cidrs must be a valid CIDR block."
+    condition     = can(cidrnetmask(var.hub_vpc_cidr))
+    error_message = "hub_vpc_cidr must be a valid CIDR block, e.g. 10.0.0.0/16."
   }
 }
 
 # ── EC2 / Master ──────────────────────────────────────────────────────────────
 variable "master_instance_type" {
-  type = string
+  description = "EC2 instance type for the master node"
+  type        = string
 }
 
 variable "key_name" {
-  type = string
+  description = "EC2 SSH key pair name"
+  type        = string
 }
 
 variable "master_private_ip" {
-  type    = string
-  default = null
+  description = "Optional fixed private IP for the master node (e.g. 10.1.1.10); if null, an IP is assigned automatically"
+  type        = string
+  default     = null
 }
 
 # ── ASG / Workers ─────────────────────────────────────────────────────────────
 variable "worker_instance_type" {
-  type = string
+  description = "EC2 instance type for all worker nodes"
+  type        = string
 }
 
 variable "worker_min" {
-  type    = number
-  default = 1
+  description = "Minimum number of worker nodes"
+  type        = number
+  default     = 1
 }
 
 variable "worker_max" {
-  type = number
+  description = "Maximum number of worker nodes"
+  type        = number
 }
 
 variable "worker_desired" {
-  type = number
+  description = "Initial desired count of worker nodes (managed by Cluster Autoscaler after first apply)"
+  type        = number
 }
 
 variable "worker_volume_size" {
-  type    = number
-  default = 20
+  description = "Root EBS volume size in GB for worker nodes"
+  type        = number
+  default     = 20
 }
 
 # ── Kubernetes ────────────────────────────────────────────────────────────────
 variable "k8s_version" {
-  type    = string
-  default = "1.29"
+  description = "Kubernetes minor version (e.g. 1.29)"
+  type        = string
+  default     = "1.29"
 }
 
 variable "pod_cidr" {
-  type    = string
-  default = "192.168.0.0/16"
+  description = "Pod network CIDR passed to kubeadm --pod-network-cidr"
+  type        = string
+  default     = "192.168.0.0/16"
 }
 
 variable "cni_manifest_url" {
-  type    = string
-  default = "https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml"
-}
-
-variable "argocd_chart_version" {
-  description = "Pin the argo-cd Helm chart version for reproducible bootstraps"
+  description = "Manifest URL applied right after kubeadm init to bring up pod networking"
   type        = string
-  default     = ""
+  default     = "https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml"
 }
 
 # ── ALB / Ingress ─────────────────────────────────────────────────────────────
 variable "https_nodeport" {
-  type    = number
-  default = 30443
+  description = "Kubernetes HTTPS NodePort the ALB target groups forward to (for NGINX Ingress)"
+  type        = number
+  default     = 30443
 }
 
 variable "apps" {
-  description = "Apps exposed through the hub's ALB — normally just Argo CD itself"
+  description = "Map of applications exposed through this spoke's ALB; each must have host, health_path, and priority keys"
   type = map(object({
     host        = string
     health_path = string
@@ -125,5 +131,6 @@ variable "apps" {
 }
 
 variable "certificate_arn" {
-  type = string
+  description = "ARN of the ACM certificate used by the ALB's HTTPS listener"
+  type        = string
 }
