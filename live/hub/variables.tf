@@ -52,15 +52,6 @@ variable "private_subnet_cidrs" {
   type        = list(string)
 }
 
-variable "hub_vpc_cidr" {
-  description = "CIDR of the hub VPC — used for the TGW route and to allow the hub's Argo CD to reach this cluster's kube-apiserver"
-  type        = string
-  validation {
-    condition     = can(cidrnetmask(var.hub_vpc_cidr))
-    error_message = "hub_vpc_cidr must be a valid CIDR block, e.g. 10.0.0.0/16."
-  }
-}
-
 # ── EC2 / Master ──────────────────────────────────────────────────────────────
 variable "master_instance_type" {
   description = "EC2 instance type for the master node"
