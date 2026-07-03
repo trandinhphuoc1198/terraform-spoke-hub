@@ -23,11 +23,22 @@ variable "cluster_name" {
 
 # ── Network ───────────────────────────────────────────────────────────────────
 variable "vpc_cidr" {
-  description = "CIDR block for this spoke's VPC (e.g. 10.1.0.0/16)"
+  description = "CIDR block for this hub's VPC (e.g. 10.1.0.0/16)"
   type        = string
   validation {
     condition     = can(cidrnetmask(var.vpc_cidr))
     error_message = "vpc_cidr must be a valid CIDR block, e.g. 10.0.0.0/16."
+  }
+}
+
+variable "spoke_vpc_cidrs" {
+  description = "CIDR block(s) of every spoke VPC this hub needs a TGW route + apiserver access to. Static, chosen up front to avoid a circular terraform_remote_state dependency between hub and spoke roots — add one entry per spoke as you bring more online."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for c in var.spoke_vpc_cidrs : can(cidrnetmask(c))])
+    error_message = "Every entry in spoke_vpc_cidrs must be a valid CIDR block."
   }
 }
 
@@ -133,4 +144,10 @@ variable "apps" {
 variable "certificate_arn" {
   description = "ARN of the ACM certificate used by the ALB's HTTPS listener"
   type        = string
+}
+
+variable "argocd_chart_version" {
+  description = "Pin the argo-cd Helm chart version for reproducible bootstraps"
+  type        = string
+  default     = ""
 }

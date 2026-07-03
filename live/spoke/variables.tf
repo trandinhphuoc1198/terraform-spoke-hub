@@ -137,7 +137,7 @@ variable "certificate_arn" {
 
 # ── S3 ────────────────────────────────────────────────────────────────────────
 variable "bucket_names" {
-  description = "Base names for S3 buckets provisioned for this cluster's workloads; each is suffixed with -${env}"
+  description = "Base names for S3 buckets provisioned for this cluster's workloads; each is suffixed with -<env>"
   type        = list(string)
   default     = []
 }
