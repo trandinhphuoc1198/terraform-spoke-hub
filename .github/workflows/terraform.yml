@@ -88,6 +88,10 @@ jobs:
             .
       - name: Install ansible-lint
         run: pip install --break-system-packages ansible-lint
+      
+      - name: Install Ansible collections
+        working-directory: packer/ansible
+        run: ansible-galaxy collection install -r requirements.yml
       - name: ansible-lint
         working-directory: packer/ansible
         run: ansible-lint playbook.yml
