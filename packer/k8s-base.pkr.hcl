@@ -29,13 +29,13 @@ data "amazon-ami" "al2023" {
 }
 
 source "amazon-ebs" "k8s_base" {
-  ami_name      = local.ami_name
-  instance_type = var.instance_type
-  region        = var.region
-  source_ami    = data.amazon-ami.al2023.id
-  subnet_id     = var.subnet_id
-  vpc_id        = var.vpc_id
-  ssh_username  = var.ssh_username
+  ami_name                    = local.ami_name
+  instance_type               = var.instance_type
+  region                      = var.region
+  source_ami                  = data.amazon-ami.al2023.id
+  subnet_id                   = var.subnet_id
+  vpc_id                      = var.vpc_id
+  ssh_username                = var.ssh_username
   associate_public_ip_address = true
 
   # Mirrors the IMDSv2 enforcement in modules/asg's launch template, so the
