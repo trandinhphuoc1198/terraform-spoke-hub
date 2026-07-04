@@ -36,6 +36,7 @@ source "amazon-ebs" "k8s_base" {
   subnet_id     = var.subnet_id
   vpc_id        = var.vpc_id
   ssh_username  = var.ssh_username
+  associate_public_ip_address = true
 
   # Mirrors the IMDSv2 enforcement in modules/asg's launch template, so the
   # build environment matches what launched instances actually run under.
