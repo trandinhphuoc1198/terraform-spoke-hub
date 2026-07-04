@@ -85,28 +85,31 @@ locals {
     chown ec2-user:ec2-user /home/ec2-user/.kube/config
     export KUBECONFIG=/etc/kubernetes/admin.conf
 
-    # ── CNI (required — no pod, including CCM/Argo CD, schedules without it) ──
-    echo "=== Installing CNI ===" >> /var/log/kubeadm-init.log
-    kubectl apply -f ${var.cni_manifest_url}
 
-    # ── AWS Cloud Controller Manager (required — removes the node's ─────────
-    #    "uninitialized" taint so anything else can schedule at all) ──────────
-    echo "=== Installing AWS CCM ===" >> /var/log/kubeadm-init.log
-    helm repo add aws-cloud-controller-manager https://kubernetes.github.io/cloud-provider-aws
-    helm repo update
-
-    helm upgrade --install aws-cloud-controller-manager aws-cloud-controller-manager/aws-cloud-controller-manager \
-      --namespace kube-system \
-      --set 'args={--v=2,--cloud-provider=aws,--configure-cloud-routes=false}'
-
-    echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
-    kubectl wait node --all --for=condition=Ready --timeout=300s
 
     %{if var.install_argocd~}
     # ── Argo CD (hub only) ────────────────────────────────────────────────────
     # This is the ONLY application-layer thing Terraform installs, because the
     # hub cluster's entire purpose is to run it. Actual Application / AppProject
     # manifests that Argo CD then syncs live in a separate GitOps repo — not here.
+
+    # ── AWS Cloud Controller Manager (required — removes the node's ─────────
+    #    "uninitialized" taint so anything else can schedule at all) ──────────
+    echo "=== Installing AWS CCM ===" >> /var/log/kubeadm-init.log
+    helm repo add aws-cloud-controller-manager https://kubernetes.github.io/cloud-provider-aws
+    helm repo update
+    helm upgrade --install aws-cloud-controller-manager aws-cloud-controller-manager/aws-cloud-controller-manager \
+      --namespace kube-system \
+      --set 'args={--v=2,--cloud-provider=aws,--configure-cloud-routes=false}'
+
+
+    # ── CNI (required — no pod, including CCM/Argo CD, schedules without it) ──
+    echo "=== Installing CNI ===" >> /var/log/kubeadm-init.log
+    kubectl apply -f ${var.cni_manifest_url}
+      
+    echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
+    kubectl wait node --all --for=condition=Ready --timeout=300s
+    
     echo "=== Installing Argo CD ===" >> /var/log/kubeadm-init.log
     helm repo add argo https://argoproj.github.io/argo-helm
     helm repo update
