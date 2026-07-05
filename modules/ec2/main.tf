@@ -350,3 +350,98 @@ resource "aws_instance" "master" {
 
   tags = { Name = "${var.env}-k8s-master", Role = "master", Env = var.env, "kubernetes.io/cluster/${var.cluster_name}" = "owned" }
 }
+
+# ── Hub discover new spokes logic block  ────────────────────────────────────────────────────────────────
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+# ── Spoke → push its own Argo CD registration credentials to Secrets Manager ──
+resource "aws_iam_role_policy" "master_argocd_registration_push" {
+  count = var.register_with_hub ? 1 : 0
+  name  = "${var.env}-k8s-master-argocd-registration-policy"
+  role  = aws_iam_role.master.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "PushOwnRegistrationSecretOnly"
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:TagResource",
+        "secretsmanager:DescribeSecret"
+      ]
+      # Scoped to exactly this cluster's own secret — same tag/name-scoping
+      # pattern already used for the CCM policy. A compromised spoke can't
+      # overwrite another spoke's registration.
+      Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:argocd-clusters/${var.cluster_name}-*"
+    }]
+  })
+}
+
+# ── Hub → IAM identity for External Secrets Operator ──────────────────────────
+resource "aws_iam_user" "eso_reader" {
+  count = var.install_eso ? 1 : 0
+  name  = "${var.env}-eso-secrets-reader"
+  tags  = { Env = var.env, Purpose = "argocd-cluster-discovery" }
+}
+
+resource "aws_iam_access_key" "eso_reader" {
+  count = var.install_eso ? 1 : 0
+  user  = aws_iam_user.eso_reader[0].name
+}
+
+resource "aws_iam_user_policy" "eso_reader" {
+  count = var.install_eso ? 1 : 0
+  name  = "${var.env}-eso-reader-policy"
+  user  = aws_iam_user.eso_reader[0].name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret", "secretsmanager:ListSecrets"]
+      Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:argocd-clusters/*"
+    }]
+  })
+}
+
+# ESO's own IAM user credentials never touch tfstate outputs or a laptop —
+# stashed in Secrets Manager, the hub master pulls them at boot with a
+# permission scoped to this one secret only (below).
+resource "aws_secretsmanager_secret" "eso_bootstrap_creds" {
+  count = var.install_eso ? 1 : 0
+  name  = "${var.env}/eso/bootstrap-credentials"
+  tags  = { Env = var.env }
+}
+
+resource "aws_secretsmanager_secret_version" "eso_bootstrap_creds" {
+  count     = var.install_eso ? 1 : 0
+  secret_id = aws_secretsmanager_secret.eso_bootstrap_creds[0].id
+  secret_string = jsonencode({
+    access_key_id     = aws_iam_access_key.eso_reader[0].id
+    secret_access_key = aws_iam_access_key.eso_reader[0].secret
+  })
+}
+
+resource "aws_iam_role_policy" "master_read_eso_bootstrap" {
+  count = var.install_eso ? 1 : 0
+  name  = "${var.env}-k8s-master-eso-bootstrap-read"
+  role  = aws_iam_role.master.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = aws_secretsmanager_secret.eso_bootstrap_creds[0].arn
+    }]
+  })
+}
+
+# ── Hub → let the CI workflow reach the master via SSM Session Manager
+#    instead of exposing :6443 publicly, just to apply one ExternalSecret.
+resource "aws_iam_role_policy_attachment" "master_ssm" {
+  count      = var.install_eso ? 1 : 0
+  role       = aws_iam_role.master.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}

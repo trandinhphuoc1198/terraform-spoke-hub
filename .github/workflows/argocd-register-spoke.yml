@@ -1,0 +1,66 @@
+name: argocd-register-spoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      spoke_cluster_name:
+        description: "Must match cluster_name in that spoke's tfvars, e.g. spoke-dev-k8s"
+        required: true
+      hub_env:
+        description: "Hub environment, e.g. hub-dev"
+        required: true
+        default: "hub-dev"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ARGOCD_REGISTRATION_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Render ExternalSecret manifest
+        run: |
+          sed "s/__CLUSTER_NAME__/${{ inputs.spoke_cluster_name }}/g" \
+            .github/templates/argocd-cluster-external-secret.yaml.tpl > manifest.yaml
+
+      - name: Locate hub master instance
+        id: instance
+        run: |
+          ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ inputs.hub_env }}-k8s-master" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" --output text)
+          if [ "$ID" = "None" ] || [ -z "$ID" ]; then
+            echo "::error::No running hub master found for ${{ inputs.hub_env }}"
+            exit 1
+          fi
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      - name: Apply manifest via SSM Send-Command
+        run: |
+          B64=$(base64 -w0 manifest.yaml)
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.instance.outputs.id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[\"echo $B64 | base64 -d | KUBECONFIG=/home/ec2-user/.kube/config kubectl apply -f -\"]" \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}"
+
+      - name: Verify registration secret landed
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.instance.outputs.id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["KUBECONFIG=/home/ec2-user/.kube/config kubectl -n argocd get secret '"${{ inputs.spoke_cluster_name }}"' -l argocd.argoproj.io/secret-type=cluster"]' \
+            --query "Command.CommandId" --output text)
+          sleep 10
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}" \
+            --query StandardOutputContent --output text | tee out.txt
+          grep -q "${{ inputs.spoke_cluster_name }}" out.txt || (echo "::error::registration secret not found on hub" && exit 1)

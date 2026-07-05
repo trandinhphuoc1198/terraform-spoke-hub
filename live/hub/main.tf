@@ -86,9 +86,11 @@ module "k8s" {
   k8s_version          = var.k8s_version
   pod_cidr             = var.pod_cidr
   env                  = var.env
+  cluster_name         = var.cluster_name
   cni_manifest_url     = var.cni_manifest_url
-  install_argocd       = true # <-- this is what makes it "the hub"
+  install_argocd       = true
   argocd_chart_version = var.argocd_chart_version
+  install_eso          = true
 }
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
@@ -105,8 +107,7 @@ module "ec2" {
   k8s_bootstrap        = module.k8s.master_userdata
   cluster_name         = var.cluster_name
   ami_id               = module.ami.ami_id
-  # Nothing needs to call INTO the hub's apiserver from a spoke — spokes are
-  # registered by the hub calling OUT to them — so no trusted CIDR needed here.
+  install_eso          = true
 }
 
 # ── ASG: worker node Auto Scaling Group ───────────────────────────────────────
@@ -140,4 +141,62 @@ module "alb" {
   asg_name          = module.asg.asg_name
   certificate_arn   = var.certificate_arn
   apps              = var.apps
+}
+
+# ── IAM role assumed by the argocd-register-spoke.yml GitHub Actions workflow ─
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}
+
+resource "aws_iam_role" "argocd_registration_ci" {
+  name = "${var.env}-argocd-registration-ci"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
+        StringLike = { "token.actions.githubusercontent.com:sub" = "repo:trandinhphuoc1198/terraform-spoke-hub:*" }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "argocd_registration_ci" {
+  name = "${var.env}-argocd-registration-ci-policy"
+  role  = aws_iam_role.argocd_registration_ci.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "FindHubMaster"
+        Effect   = "Allow"
+        Action   = ["ec2:DescribeInstances"]
+        Resource = "*" # DescribeInstances has no resource-level scoping (AWS limitation)
+      },
+      {
+        Sid    = "RunOnHubMasterOnly"
+        Effect = "Allow"
+        Action = ["ssm:SendCommand"]
+        Resource = [
+          module.ec2.master_instance_arn,
+          "arn:aws:ssm:${var.region}::document/AWS-RunShellScript"
+        ]
+      },
+      {
+        Sid      = "ReadCommandResults"
+        Effect   = "Allow"
+        Action   = ["ssm:GetCommandInvocation", "ssm:ListCommands", "ssm:ListCommandInvocations"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+output "argocd_registration_ci_role_arn" {
+  value = aws_iam_role.argocd_registration_ci.arn
 }

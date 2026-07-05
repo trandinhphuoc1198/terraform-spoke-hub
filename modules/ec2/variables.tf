@@ -33,3 +33,15 @@ variable "s3_bucket_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "register_with_hub" {
+  description = "If true, grants this cluster's master role permission to push its own Argo CD registration credentials to Secrets Manager (argocd-clusters/<cluster_name>). Set true on spokes, false on the hub."
+  type        = bool
+  default     = false
+}
+
+variable "install_eso" {
+  description = "If true, provisions the IAM identity External Secrets Operator uses to read every spoke's registration secret, plus SSM access for the CI registration workflow. Set true only on the hub."
+  type        = bool
+  default     = false
+}

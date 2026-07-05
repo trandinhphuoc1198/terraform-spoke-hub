@@ -1,0 +1,132 @@
+name: deploy-infra
+
+# Manual trigger ONLY. This actually creates/modifies real AWS infrastructure,
+# so it must never run on push/PR — only from the GitHub UI (Actions tab ->
+# Run workflow) or `gh workflow run`.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which envs/<environment> folder to deploy (backend.hcl + terraform.tfvars must exist for it in every root)"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+
+# Required for AWS OIDC role assumption (no long-lived AWS keys in GitHub).
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.9.0"
+  AWS_REGION: "ap-northeast-1"
+  TF_STATE_BUCKET: "terraform-state-phuoctd6"
+
+jobs:
+  # ── 1. Shared Transit Gateway ────────────────────────────────────────────
+  # Must apply first — live/hub and live/spoke both read its output via
+  # terraform_remote_state.
+  deploy-network:
+    name: "network (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: global/network
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan
+        run: terraform plan -var="env_prefix=${{ inputs.environment }}" -out=tfplan
+
+      - name: terraform apply
+        run: terraform apply -auto-approve tfplan
+
+  # ── 2. Spoke (workload cluster) ──────────────────────────────────────────
+  deploy-spoke:
+    name: "spoke (${{ inputs.environment }})"
+    needs: deploy-network
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: live/spoke
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan
+        run: |
+          terraform plan \
+            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
+            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
+            -out=tfplan
+
+      - name: terraform apply
+        run: terraform apply -auto-approve tfplan
+
+  # ── 3. Hub (Argo CD cluster) ──────────────────────────────────────────────
+  # README notes apply order between spoke/hub doesn't technically matter
+  # (both roots use static CIDRs, not each other's live outputs) — kept
+  # sequential anyway so a failed spoke apply doesn't leave the hub half-wired.
+  deploy-hub:
+    name: "hub (${{ inputs.environment }})"
+    needs: deploy-spoke
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: live/hub
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan
+        run: |
+          terraform plan \
+            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
+            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
+            -out=tfplan
+
+      - name: terraform apply
+        run: terraform apply -auto-approve tfplan

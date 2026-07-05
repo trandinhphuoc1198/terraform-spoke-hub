@@ -66,28 +66,29 @@ module "k8s" {
   k8s_version      = var.k8s_version
   pod_cidr         = var.pod_cidr
   env              = var.env
+  cluster_name     = var.cluster_name
   cni_manifest_url = var.cni_manifest_url
-  install_argocd   = false # spokes are managed BY Argo CD, never run it
+  install_argocd   = false
+  register_with_hub = true
 }
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
 module "ec2" {
-  source               = "../../modules/ec2"
-  env                  = var.env
-  vpc_id               = module.vpc.vpc_id
-  private_subnet_ids   = module.vpc.private_subnet_ids
-  public_subnet_ids    = module.vpc.public_subnet_ids
-  master_instance_type = var.master_instance_type
-  key_name             = var.key_name
-  master_private_ip    = var.master_private_ip
-  alb_sg_id            = module.alb.alb_sg_id
-  k8s_bootstrap        = module.k8s.master_userdata
-  cluster_name         = var.cluster_name
-  ami_id               = module.ami.ami_id
-  # Lets the hub's Argo CD reach this cluster's kube-apiserver over the TGW
-  # to register it as a remote cluster and start syncing workloads.
+  source                  = "../../modules/ec2"
+  env                     = var.env
+  vpc_id                  = module.vpc.vpc_id
+  private_subnet_ids      = module.vpc.private_subnet_ids
+  public_subnet_ids       = module.vpc.public_subnet_ids
+  master_instance_type    = var.master_instance_type
+  key_name                = var.key_name
+  master_private_ip       = var.master_private_ip
+  alb_sg_id               = module.alb.alb_sg_id
+  k8s_bootstrap           = module.k8s.master_userdata
+  cluster_name            = var.cluster_name
+  ami_id                  = module.ami.ami_id
   trusted_api_cidr_blocks = [var.hub_vpc_cidr]
   s3_bucket_arns          = module.s3.bucket_arns
+  register_with_hub       = true
 }
 
 # ── ASG: worker node Auto Scaling Group ───────────────────────────────────────

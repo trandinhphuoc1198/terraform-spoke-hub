@@ -35,3 +35,21 @@ variable "argocd_chart_version" {
   type        = string
   default     = ""
 }
+
+variable "cluster_name" {
+  type        = string
+  description = "K8s cluster name — used as the key under argocd-clusters/ in Secrets Manager when register_with_hub is true"
+  default     = ""
+}
+
+variable "register_with_hub" {
+  type        = bool
+  description = "If true, master bootstrap creates an argocd-manager SA/token and pushes it to Secrets Manager for the hub's Argo CD to discover. Spokes only."
+  default     = false
+}
+
+variable "install_eso" {
+  type        = bool
+  description = "If true, master bootstrap installs External Secrets Operator and wires a ClusterSecretStore to AWS Secrets Manager. Hub only."
+  default     = false
+}

@@ -123,6 +123,118 @@ locals {
       --set configs.params."server\.insecure"=true
     %{endif~}
 
+    %{if var.install_eso~}
+    # ── External Secrets Operator (hub only) ───────────────────────────────────
+    # Pulls each spoke's registration credentials out of Secrets Manager and
+    # materializes them as labeled Secrets in the argocd namespace. CI applies
+    # one ExternalSecret per spoke (argocd-register-spoke.yml); this refreshes
+    # it forever after, so token rotation self-heals with no CI re-run needed.
+    echo "=== Installing External Secrets Operator ===" >> /var/log/kubeadm-init.log
+    helm repo add external-secrets https://charts.external-secrets.io
+    helm repo update
+    helm upgrade --install external-secrets external-secrets/external-secrets \
+      --namespace external-secrets --create-namespace
+
+    ESO_CREDS=$(aws secretsmanager get-secret-value \
+      --secret-id "${var.env}/eso/bootstrap-credentials" \
+      --region "$AWS_REGION" --query SecretString --output text)
+    ESO_ACCESS_KEY=$(echo "$ESO_CREDS" | jq -r .access_key_id)
+    ESO_SECRET_KEY=$(echo "$ESO_CREDS" | jq -r .secret_access_key)
+
+    kubectl create secret generic aws-creds -n external-secrets \
+      --from-literal=access-key-id="$ESO_ACCESS_KEY" \
+      --from-literal=secret-access-key="$ESO_SECRET_KEY" \
+      --dry-run=client -o yaml | kubectl apply -f -
+
+    cat <<EOF | kubectl apply -f -
+    apiVersion: external-secrets.io/v1beta1
+    kind: ClusterSecretStore
+    metadata:
+      name: argocd-clusters-store
+    spec:
+      provider:
+        aws:
+          service: SecretsManager
+          region: "$AWS_REGION"
+          auth:
+            secretRef:
+              accessKeyIDSecretRef:
+                name: aws-creds
+                namespace: external-secrets
+                key: access-key-id
+              secretAccessKeySecretRef:
+                name: aws-creds
+                namespace: external-secrets
+                key: secret-access-key
+    EOF
+    %{endif~}
+
+    %{if var.register_with_hub~}
+    # ── Register this cluster with the hub's Argo CD (spokes only) ────────────
+    # cluster-admin-bound ServiceAccount, token pushed to Secrets Manager at
+    # argocd-clusters/<cluster_name>. A systemd timer re-mints and re-pushes
+    # every 30 days so the token never actually expires in practice.
+    echo "=== Creating argocd-manager service account ===" >> /var/log/kubeadm-init.log
+    kubectl create namespace argocd-manager --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create serviceaccount argocd-manager -n argocd-manager --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create clusterrolebinding argocd-manager-binding \
+      --clusterrole=cluster-admin \
+      --serviceaccount=argocd-manager:argocd-manager \
+      --dry-run=client -o yaml | kubectl apply -f -
+
+    cat <<'ROTATE' > /usr/local/bin/push-argocd-registration.sh
+    #!/bin/bash
+    set -euo pipefail
+    export KUBECONFIG=/etc/kubernetes/admin.conf
+    IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+    AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+    MASTER_IP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+
+    TOKEN=$(kubectl create token argocd-manager -n argocd-manager --duration=2160h)
+    CA_DATA=$(kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
+    SECRET_NAME="argocd-clusters/${var.cluster_name}"
+    SERVER_URL="https://$MASTER_IP:6443"
+
+    PAYLOAD=$(jq -n \
+      --arg name "${var.cluster_name}" \
+      --arg server "$SERVER_URL" \
+      --arg token "$TOKEN" \
+      --arg ca "$CA_DATA" \
+      '{name:$name, server:$server, token:$token, caData:$ca}')
+
+    aws secretsmanager put-secret-value \
+      --secret-id "$SECRET_NAME" \
+      --secret-string "$PAYLOAD" \
+      --region "$AWS_REGION" 2>/dev/null || \
+    aws secretsmanager create-secret \
+      --name "$SECRET_NAME" \
+      --secret-string "$PAYLOAD" \
+      --tags Key=ManagedBy,Value=k8s-bootstrap Key=ClusterName,Value=${var.cluster_name} Key=Purpose,Value=argocd-registration \
+      --region "$AWS_REGION"
+    ROTATE
+    chmod +x /usr/local/bin/push-argocd-registration.sh
+    /usr/local/bin/push-argocd-registration.sh
+
+    cat <<'TIMERUNIT' > /etc/systemd/system/argocd-registration-rotate.timer
+    [Unit]
+    Description=Rotate argocd-manager token every 30 days
+    [Timer]
+    OnCalendar=*-*-1..28/30 03:00:00
+    Persistent=true
+    [Install]
+    WantedBy=timers.target
+    TIMERUNIT
+    cat <<'SERVICEUNIT' > /etc/systemd/system/argocd-registration-rotate.service
+    [Unit]
+    Description=Push refreshed argocd-manager token to Secrets Manager
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/bin/push-argocd-registration.sh
+    SERVICEUNIT
+    systemctl daemon-reload
+    systemctl enable --now argocd-registration-rotate.timer
+    %{endif~}
+
     # ── Upload raw join command to SSM (workers parse it themselves) ──────────
     echo "=== Pushing join command to SSM ===" >> /var/log/kubeadm-init.log
     aws ssm put-parameter \

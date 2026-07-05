@@ -26,3 +26,8 @@ output "ssm_join_token_arn" {
   description = "ARN of the SSM parameter storing the kubeadm join token"
   value       = aws_ssm_parameter.cluster_join_token.arn
 }
+
+output "master_instance_arn" {
+  description = "ARN of the master EC2 instance — used to scope the CI role's ssm:SendCommand permission to this instance only"
+  value       = aws_instance.master.arn
+}
