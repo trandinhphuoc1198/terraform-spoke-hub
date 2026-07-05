@@ -58,7 +58,42 @@ jobs:
       - name: terraform apply
         run: terraform apply -auto-approve tfplan
 
-  # ── 2. Spoke (workload cluster) ──────────────────────────────────────────
+  # ── 2. Hub (Argo CD cluster) ──────────────────────────────────────────────
+  deploy-hub:
+    name: "hub (${{ inputs.environment }})"
+    needs: deploy-network
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: live/hub
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan
+        run: |
+          terraform plan \
+            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
+            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
+            -out=tfplan
+
+      - name: terraform apply
+        run: terraform apply -auto-approve tfplan
+
+  # ── 3. Spoke (workload cluster) ──────────────────────────────────────────
   deploy-spoke:
     name: "spoke (${{ inputs.environment }})"
     needs: deploy-network
@@ -93,40 +128,11 @@ jobs:
       - name: terraform apply
         run: terraform apply -auto-approve tfplan
 
-  # ── 3. Hub (Argo CD cluster) ──────────────────────────────────────────────
-  # README notes apply order between spoke/hub doesn't technically matter
-  # (both roots use static CIDRs, not each other's live outputs) — kept
-  # sequential anyway so a failed spoke apply doesn't leave the hub half-wired.
-  deploy-hub:
-    name: "hub (${{ inputs.environment }})"
-    needs: deploy-spoke
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    defaults:
-      run:
-        working-directory: live/hub
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: terraform init
-        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
-
-      - name: terraform plan
-        run: |
-          terraform plan \
-            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
-            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
-            -out=tfplan
-
-      - name: terraform apply
-        run: terraform apply -auto-approve tfplan
+  register-spoke:
+    name: "register spoke with hub argocd (${{ inputs.environment }})"
+    needs: [deploy-spoke, deploy-hub]
+    uses: ./.github/workflows/argocd-register-spoke.yml
+    with:
+      spoke_cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}
+      hub_env: hub-${{ inputs.environment }}
+    secrets: inherit

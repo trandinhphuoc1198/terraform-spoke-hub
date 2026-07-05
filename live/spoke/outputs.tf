@@ -28,3 +28,7 @@ output "vpc_cidr" {
 output "tgw_attachment_id" {
   value = module.tgw_attachment.attachment_id
 }
+
+output "cluster_name" {
+  value = var.cluster_name
+}

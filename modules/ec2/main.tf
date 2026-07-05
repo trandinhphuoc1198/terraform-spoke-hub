@@ -126,7 +126,7 @@ resource "aws_security_group_rule" "worker_ingress_ssh" {
   to_port           = 22
   protocol          = "tcp"
   security_group_id = aws_security_group.worker.id
-  cidr_blocks       = ["10.0.0.0/16"]
+  cidr_blocks       = [var.vpc_cidr]
 }
 
 resource "aws_security_group_rule" "worker_egress_all" {

@@ -10,6 +10,17 @@ on:
         description: "Hub environment, e.g. hub-dev"
         required: true
         default: "hub-dev"
+  workflow_call:
+    inputs:
+      spoke_cluster_name:
+        type: string
+        required: true
+      hub_env:
+        type: string
+        required: true
+    secrets:
+      ARGOCD_REGISTRATION_ROLE_ARN:
+        required: true
 
 permissions:
   id-token: write
