@@ -21,15 +21,21 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
   tags = { Name = "${var.env}-tgw-attachment" }
 }
 
-resource "aws_route" "to_peer" {
-  for_each = toset(flatten([
-    for rt_id in var.route_table_ids : [
-      for cidr in var.peer_cidr_blocks : "${rt_id}|${cidr}"
-    ]
-  ]))
+locals {
+  route_cidr_pairs = {
+    for pair in setproduct(range(length(var.route_table_ids)), var.peer_cidr_blocks) :
+    "${pair[0]}|${pair[1]}" => {
+      rt_index = pair[0]
+      cidr     = pair[1]
+    }
+  }
+}
 
-  route_table_id         = split("|", each.value)[0]
-  destination_cidr_block = split("|", each.value)[1]
+resource "aws_route" "to_peer" {
+  for_each = local.route_cidr_pairs
+
+  route_table_id         = var.route_table_ids[each.value.rt_index]
+  destination_cidr_block = each.value.cidr
   transit_gateway_id     = var.transit_gateway_id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.this]

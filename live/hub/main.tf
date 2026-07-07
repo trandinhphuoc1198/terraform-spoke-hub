@@ -4,16 +4,18 @@
 # Runs at plan time — catches the classic "copy-pasted the same /16 twice"
 # mistake before it fails deep inside a TGW route apply.
 locals {
+  all_cidrs = concat([var.vpc_cidr], var.spoke_vpc_cidrs)
+
   cidr_ranges = {
-    for c in concat([var.vpc_cidr], var.spoke_vpc_cidrs) : c => {
+    for c in local.all_cidrs : c => {
       start = sum([for i, o in split(".", cidrhost(c, 0)) : tonumber(o) * pow(256, 3 - i)])
       end   = sum([for i, o in split(".", cidrhost(c, 0)) : tonumber(o) * pow(256, 3 - i)]) + pow(2, 32 - tonumber(split("/", c)[1])) - 1
     }
   }
 
   cidr_pairs = [
-    for pair in setproduct(keys(local.cidr_ranges), keys(local.cidr_ranges)) :
-    pair if pair[0] < pair[1]
+    for pair in setproduct(range(length(local.all_cidrs)), range(length(local.all_cidrs))) :
+    [local.all_cidrs[pair[0]], local.all_cidrs[pair[1]]] if pair[0] < pair[1]
   ]
 
   overlapping_pairs = [

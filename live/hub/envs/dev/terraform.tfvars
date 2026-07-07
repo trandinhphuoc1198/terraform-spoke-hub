@@ -13,15 +13,15 @@ private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
 spoke_vpc_cidrs = ["10.1.0.0/16"]
 
 # Smaller than the spoke — this cluster only needs to run Argo CD.
-master_instance_type = "t3.medium"
+master_instance_type = "t3.small"
 worker_instance_type = "t3.small"
 key_name             = "key"
 master_private_ip    = "10.0.1.10"
 
 worker_min         = 1
 worker_max         = 3
-worker_desired     = 2
-worker_volume_size = 17
+worker_desired     = 1
+worker_volume_size = 20
 
 k8s_version = "1.29"
 pod_cidr    = "192.168.0.0/16"

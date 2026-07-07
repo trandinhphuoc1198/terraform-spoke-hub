@@ -18,7 +18,7 @@ master_private_ip    = "10.1.1.10"
 worker_min         = 1
 worker_max         = 6
 worker_desired     = 1
-worker_volume_size = 17
+worker_volume_size = 20
 
 k8s_version = "1.29"
 pod_cidr    = "192.168.0.0/16"
