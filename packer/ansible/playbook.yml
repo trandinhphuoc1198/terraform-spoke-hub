@@ -28,8 +28,26 @@
 
     - name: Install base utilities
       ansible.builtin.dnf:
-        name: jq
+        name:
+          - jq
+          - git
         state: present
+
+    - name: Download Helm installer script
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /tmp/get_helm.sh
+        mode: "0755"
+
+    - name: Run Helm installer script
+      ansible.builtin.command: /tmp/get_helm.sh
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Remove Helm installer script from tmp
+      ansible.builtin.file:
+        path: /tmp/get_helm.sh
+        state: absent
 
     - name: Disable swap now
       ansible.builtin.command: swapoff -a
@@ -121,6 +139,3 @@
         name: kubelet
         enabled: true
         state: started
-      # kubelet will crashloop harmlessly until kubeadm init/join configures
-      # it at launch time — same behavior as the original `systemctl enable
-      # --now kubelet` in modules/k8s's user_data.
