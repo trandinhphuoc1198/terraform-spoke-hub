@@ -62,13 +62,13 @@ module "tgw_attachment" {
 
 # ── K8s bootstrap scripts (CNI + CCM only — no Argo CD on a spoke) ────────────
 module "k8s" {
-  source           = "../../modules/k8s"
-  k8s_version      = var.k8s_version
-  pod_cidr         = var.pod_cidr
-  env              = var.env
-  cluster_name     = var.cluster_name
-  cni_manifest_url = var.cni_manifest_url
-  install_argocd   = false
+  source            = "../../modules/k8s"
+  k8s_version       = var.k8s_version
+  pod_cidr          = var.pod_cidr
+  env               = var.env
+  cluster_name      = var.cluster_name
+  cni_manifest_url  = var.cni_manifest_url
+  install_argocd    = false
   register_with_hub = true
 }
 

@@ -160,7 +160,7 @@ resource "aws_iam_role" "argocd_registration_ci" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike = { "token.actions.githubusercontent.com:sub" = "repo:trandinhphuoc1198/terraform-spoke-hub:*" }
+        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:trandinhphuoc1198/terraform-spoke-hub:*" }
       }
     }]
   })
@@ -168,7 +168,7 @@ resource "aws_iam_role" "argocd_registration_ci" {
 
 resource "aws_iam_role_policy" "argocd_registration_ci" {
   name = "${var.env}-argocd-registration-ci-policy"
-  role  = aws_iam_role.argocd_registration_ci.id
+  role = aws_iam_role.argocd_registration_ci.id
 
   policy = jsonencode({
     Version = "2012-10-17"
