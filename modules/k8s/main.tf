@@ -14,7 +14,7 @@ output "master_userdata" {
 }
 
 output "worker_userdata" {
-  value = templatefile("${path.module}/templates/worker_join.sh.tpl", {
+  value = templatefile("${path.module}/templates/worker_init.sh.tpl", {
     env = var.env
   })
 }
