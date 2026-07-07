@@ -98,7 +98,7 @@ resource "aws_eip" "nat" {
   tags     = { Name = "${var.env}-nat-eip" }
 }
 
-# ── S3 endpoint
+# ── S3 endpoint (Gateway) ──────────────────────────────────────────────────
 resource "aws_vpc_endpoint" "s3" {
   vpc_id       = aws_vpc.main.id
   service_name = "com.amazonaws.${var.region}.s3"
@@ -112,6 +112,63 @@ resource "aws_vpc_endpoint" "s3" {
   tags = {
     Name = "${var.env}-s3-endpoint"
   }
+}
+
+# ── SSM Interface Endpoints ────────────────────────────────────────────────
+resource "aws_security_group" "vpc_endpoints" {
+  name        = "${var.env}-vpc-endpoints-sg"
+  description = "Allows HTTPS from inside the VPC to the SSM interface endpoints"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTPS from anywhere in the VPC (master/worker SG egress lands here)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.env}-vpc-endpoints-sg" }
+}
+
+resource "aws_vpc_endpoint" "ssm" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.ssm"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = { Name = "${var.env}-ssm-endpoint" }
+}
+
+resource "aws_vpc_endpoint" "ssmmessages" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.ssmmessages"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = { Name = "${var.env}-ssmmessages-endpoint" }
+}
+
+resource "aws_vpc_endpoint" "ec2messages" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.ec2messages"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = { Name = "${var.env}-ec2messages-endpoint" }
 }
 
 # ── Route tables ──────────────────────────────────────────────────────────────

@@ -58,13 +58,13 @@ resource "aws_security_group_rule" "master_ingress_self" {
 }
 
 resource "aws_security_group_rule" "master_ingress_ssh" {
-  description       = "SSH from anywhere"
+  description       = "SSH fallback access, VPC-only — SSM Session Manager is the primary access path"
   type              = "ingress"
   from_port         = 22
   to_port           = 22
   protocol          = "tcp"
   security_group_id = aws_security_group.master.id
-  cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = [var.vpc_cidr]
 }
 
 resource "aws_security_group_rule" "master_ingress_api_from_trusted_cidrs" {
@@ -235,6 +235,12 @@ resource "aws_iam_instance_profile" "master" {
   role = aws_iam_role.master.name
 }
 
+# ── Master → SSM Session Manager ───────────────────────────────────────────
+resource "aws_iam_role_policy_attachment" "master_ssm" {
+  role       = aws_iam_role.master.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # ── IAM role: worker (used by ASG launch template) ────────────────────────────
 resource "aws_iam_role" "worker" {
   name = "${var.env}-k8s-worker-role"
@@ -333,11 +339,19 @@ resource "aws_instance" "master" {
   # kubelet/kubectl + node prep baked in) — see /packer and modules/ami.
   # No dynamic SSM lookup here anymore, so both this instance and every
   # worker launched by modules/asg come from the exact same image.
+  #
+  # Master lives in a private subnet, same as workers — no public IP.
+  # Reached exclusively via SSM Session Manager (see the unconditional
+  # aws_iam_role_policy_attachment.master_ssm above); SSH stays available
+  # only as a VPC-internal fallback (see master_ingress_ssh above).
+  # Outbound internet (kubeadm/yum/SSM heartbeat has an interface-endpoint
+  # path too — see modules/vpc) flows through the same NAT instance workers
+  # already use — private route table already routes 0.0.0.0/0 there.
   ami                         = var.ami_id
   instance_type               = var.master_instance_type
-  subnet_id                   = var.public_subnet_ids[0]
+  subnet_id                   = var.private_subnet_ids[0]
   private_ip                  = var.master_private_ip
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   vpc_security_group_ids      = [aws_security_group.master.id]
   key_name                    = var.key_name
   iam_instance_profile        = aws_iam_instance_profile.master.name
@@ -436,12 +450,4 @@ resource "aws_iam_role_policy" "master_read_eso_bootstrap" {
       Resource = aws_secretsmanager_secret.eso_bootstrap_creds[0].arn
     }]
   })
-}
-
-# ── Hub → let the CI workflow reach the master via SSM Session Manager
-#    instead of exposing :6443 publicly, just to apply one ExternalSecret.
-resource "aws_iam_role_policy_attachment" "master_ssm" {
-  count      = var.install_eso ? 1 : 0
-  role       = aws_iam_role.master.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }

@@ -2,9 +2,9 @@ output "master_private_ip" {
   value = aws_instance.master.private_ip
 }
 
-output "master_public_ip" {
-  description = "Public IP of the master node"
-  value       = aws_instance.master.public_ip
+output "master_instance_id" {
+  description = "EC2 instance ID of the master — use `aws ssm start-session --target <id>` to reach it (no public IP, SSH is VPC-only fallback)"
+  value       = aws_instance.master.id
 }
 
 output "master_sg_id" {

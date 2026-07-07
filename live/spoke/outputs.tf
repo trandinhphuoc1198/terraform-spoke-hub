@@ -3,9 +3,9 @@ output "alb_dns_name" {
   value       = module.alb.alb_dns_name
 }
 
-output "master_public_ip" {
-  description = "SSH here to grab the spoke kubeconfig / check bootstrap logs"
-  value       = module.ec2.master_public_ip
+output "master_instance_id" {
+  description = "aws ssm start-session --target <this> to grab the spoke kubeconfig / check bootstrap logs (master has no public IP)"
+  value       = module.ec2.master_instance_id
 }
 
 output "master_private_ip" {

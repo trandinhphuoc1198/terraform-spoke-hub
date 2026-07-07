@@ -16,7 +16,7 @@ spoke_vpc_cidrs = ["10.1.0.0/16"]
 master_instance_type = "t3.small"
 worker_instance_type = "t3.small"
 key_name             = "key"
-master_private_ip    = "10.0.1.10"
+master_private_ip    = "10.0.11.10"
 
 worker_min         = 1
 worker_max         = 3
