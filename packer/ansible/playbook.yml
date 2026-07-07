@@ -15,6 +15,17 @@
     k8s_version: "1.29" # overridden via `--extra-vars k8s_version=...` from Packer
 
   tasks:
+    - name: Install amazon-ssm-agent
+      ansible.builtin.dnf:
+        name: amazon-ssm-agent
+        state: present
+
+    - name: Enable and start amazon-ssm-agent
+      ansible.builtin.systemd:
+        name: amazon-ssm-agent
+        enabled: true
+        state: started
+
     - name: Install base utilities
       ansible.builtin.dnf:
         name: jq
