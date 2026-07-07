@@ -28,6 +28,7 @@ data "amazon-ami" "al2023" {
   region      = var.region
 }
 
+
 source "amazon-ebs" "k8s_base" {
   ami_name                    = local.ami_name
   instance_type               = var.instance_type
@@ -38,16 +39,19 @@ source "amazon-ebs" "k8s_base" {
   ssh_username                = var.ssh_username
   associate_public_ip_address = true
 
-  # Mirrors the IMDSv2 enforcement in modules/asg's launch template, so the
-  # build environment matches what launched instances actually run under.
+  launch_block_device_mappings {
+    device_name           = "/dev/xvda"
+    volume_size           = 20
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
     http_put_response_hop_limit = 2
   }
 
-  # "purpose" + the name prefix are what modules/ami's aws_ami data source
-  # filters on — don't rename/remove these tags without updating that module.
   tags = {
     Name               = local.ami_name
     purpose            = "k8s-base"
