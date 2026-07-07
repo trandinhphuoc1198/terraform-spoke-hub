@@ -58,7 +58,7 @@ resource "aws_security_group_rule" "master_ingress_self" {
 }
 
 resource "aws_security_group_rule" "master_ingress_ssh" {
-  description       = "SSH fallback access, VPC-only — SSM Session Manager is the primary access path"
+  description       = "SSH fallback access, VPC-only - SSM Session Manager is the primary access path"
   type              = "ingress"
   from_port         = 22
   to_port           = 22
