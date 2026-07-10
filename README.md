@@ -107,3 +107,7 @@ This creates a `Secret` (type `argocd.argoproj.io/secret-type: cluster`) in the 
 - **Local-path module sources** (`source = "../../modules/vpc"`) rather than a versioned Git/registry reference. Correct for a single monorepo where hub, spoke, and modules all change together in one PR. If modules ever move to their own repo consumed by multiple independent repos, switch to `source = "git::https://github.com/<org>/terraform-modules.git//vpc?ref=v1.2.0"` so consumers can upgrade on their own schedule.
 - **`ec2:Describe*` stays `Resource: "*"`** in the CCM policy — see IAM note above, this is an AWS API limitation, not a Terraform gap.
 
+## Limitations
+1. aws-node-termination-handler
+2. Offload Logging to AWS CloudWatch Agent
+3. multi master node

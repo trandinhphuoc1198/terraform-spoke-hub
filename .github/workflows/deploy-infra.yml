@@ -92,6 +92,20 @@ jobs:
 
       - name: terraform apply
         run: terraform apply -auto-approve tfplan
+        
+  # bootstrap-argocd:
+  #   name: "bootstrap argocd (${{ inputs.environment }})"
+  #   needs: deploy-hub
+  #   runs-on: ubuntu-latest
+  #   environment: ${{ inputs.environment }}
+  #   steps:
+  #     - name: Trigger gitops repo bootstrap workflow
+  #       run: |
+  #         curl -X POST \
+  #           -H "Authorization: token ${{ secrets.GITOPS_REPO_DISPATCH_TOKEN }}" \
+  #           -H "Accept: application/vnd.github.v3+json" \
+  #           https://api.github.com/repos/trandinhphuoc1198/k8s_ArgoCD/actions/workflows/bootstrap-argocd.yml/dispatches \
+  #           -d '{"ref":"main","inputs":{"environment":"${{ inputs.environment }}"}}'
 
   # ── 3. Spoke (workload cluster) ──────────────────────────────────────────
   deploy-spoke:

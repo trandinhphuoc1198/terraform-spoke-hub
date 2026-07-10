@@ -93,6 +93,7 @@ module "k8s" {
   install_argocd       = true
   argocd_chart_version = var.argocd_chart_version
   install_eso          = true
+  gitops_repo_raw_url  = var.gitops_repo_raw_url
 }
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
@@ -161,7 +162,7 @@ resource "aws_iam_role" "argocd_registration_ci" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:trandinhphuoc1198/terraform-spoke-hub:*" }
+        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:trandinhphuoc1198/*:*" }
       }
     }]
   })

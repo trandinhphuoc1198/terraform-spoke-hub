@@ -10,6 +10,7 @@ output "master_userdata" {
     env                  = var.env
     register_with_hub    = var.register_with_hub
     cluster_name         = var.cluster_name
+    gitops_repo_raw_url  = var.gitops_repo_raw_url
   })
 }
 

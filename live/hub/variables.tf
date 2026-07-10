@@ -142,3 +142,8 @@ variable "argocd_chart_version" {
   type        = string
   default     = ""
 }
+
+variable "gitops_repo_raw_url" {
+  description = "Raw content base URL for the gitops repo — passed to modules/k8s to apply Argo CD bootstrap manifests (AppProjects, root-app) right after install"
+  type        = string
+}

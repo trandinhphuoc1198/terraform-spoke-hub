@@ -53,3 +53,9 @@ variable "install_eso" {
   description = "If true, master bootstrap installs External Secrets Operator and wires a ClusterSecretStore to AWS Secrets Manager. Hub only."
   default     = false
 }
+
+variable "gitops_repo_raw_url" {
+  type        = string
+  description = "Raw content base URL for the gitops repo (e.g. https://raw.githubusercontent.com/<org>/gitops/main). Only used when install_argocd = true, to apply the bootstrap manifests (AppProjects + root-app) right after Argo CD installs."
+  default     = "https://github.com/trandinhphuoc1198/k8s_ArgoCD"
+}

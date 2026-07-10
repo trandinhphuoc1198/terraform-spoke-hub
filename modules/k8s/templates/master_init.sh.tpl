@@ -13,7 +13,7 @@ AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.1
 cat <<EOF > /tmp/kubeadm-config.yaml
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
-kubernetesVersion: "${k8s_version}.0"
+kubernetesVersion: "${k8s_version}"
 apiServer:
   extraArgs:
     cloud-provider: "external"
@@ -86,6 +86,21 @@ helm upgrade --install argocd argo/argo-cd \
   --version "${argocd_chart_version}" \
   %{ endif ~}
   --set configs.params."server\.insecure"=true
+
+# ── Bootstrap Argo CD's own reconciliation loop ───────────────────────────
+# From this point forward, Argo CD (not Terraform) owns everything under
+# apps/infra and apps/workloads in the gitops repo. This is the ONLY
+# kubectl apply of gitops-repo content that ever comes from Terraform —
+# everything downstream is Argo CD syncing from Git continuously.
+echo "=== Waiting for Argo CD CRDs to be ready ===" >> /var/log/kubeadm-init.log
+kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=180s
+kubectl wait --for=condition=Established crd/appprojects.argoproj.io --timeout=180s
+kubectl wait --for=condition=Established crd/applicationsets.argoproj.io --timeout=180s
+
+echo "=== Applying Argo CD bootstrap manifests from gitops repo ===" >> /var/log/kubeadm-init.log
+kubectl apply -f "${gitops_repo_raw_url}/argocd/projects/platform-infra.yaml"
+kubectl apply -f "${gitops_repo_raw_url}/argocd/projects/platform-apps.yaml"
+kubectl apply -f "${gitops_repo_raw_url}/argocd/root-app.yaml"
 %{ endif ~}
 
 %{ if install_eso ~}

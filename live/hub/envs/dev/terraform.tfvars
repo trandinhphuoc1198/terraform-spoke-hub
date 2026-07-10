@@ -23,8 +23,9 @@ worker_max         = 3
 worker_desired     = 1
 worker_volume_size = 20
 
-k8s_version = "1.29"
-pod_cidr    = "192.168.0.0/16"
+k8s_version         = "1.29"
+pod_cidr            = "192.168.0.0/16"
+gitops_repo_raw_url = "https://github.com/trandinhphuoc1198/k8s_ArgoCD"
 
 https_nodeport       = 30443
 certificate_arn      = "arn:aws:acm:ap-northeast-1:633825695180:certificate/7cdd7b32-e304-4cee-989f-eb5b7cb08c34"
