@@ -10,6 +10,14 @@ on:
         description: "Hub environment, e.g. hub-dev"
         required: true
         default: "hub-dev"
+      cluster_role:
+        description: "Label value for cluster-role, e.g. workload"
+        required: true
+        default: "workload"
+      cluster_env:
+        description: "Label value for cluster-env, e.g. dev"
+        required: true
+        default: "dev"
   workflow_call:
     inputs:
       spoke_cluster_name:
@@ -18,6 +26,12 @@ on:
       hub_env:
         type: string
         required: true
+      cluster_role:
+        type: string
+        default: "workload"
+      cluster_env:
+        type: string
+        default: "dev"
     secrets:
       ARGOCD_REGISTRATION_ROLE_ARN:
         required: true
@@ -39,9 +53,11 @@ jobs:
 
       - name: Render ExternalSecret manifest
         run: |
-          sed "s/__CLUSTER_NAME__/${{ inputs.spoke_cluster_name }}/g" \
+          sed \
+            -e "s/__CLUSTER_NAME__/${{ inputs.spoke_cluster_name }}/g" \
+            -e "s/__CLUSTER_ROLE__/${{ inputs.cluster_role }}/g" \
+            -e "s/__CLUSTER_ENV__/${{ inputs.cluster_env }}/g" \
             .github/templates/argocd-cluster-external-secret.yaml.tpl > manifest.yaml
-
       - name: Locate hub master instance
         id: instance
         run: |

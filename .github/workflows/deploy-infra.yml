@@ -180,12 +180,25 @@ jobs:
       argocd_chart_version: ${{ vars.ARGOCD_CHART_VERSION }}
       gitops_repo_raw_url: https://raw.githubusercontent.com/trandinhphuoc1198/k8s_ArgoCD/main
     secrets: inherit
+
+  register-with-hub-spoke:
+    name: "register spoke with hub (secrets manager) — ${{ inputs.environment }}"
+    needs: bootstrap-cluster-spoke
+    uses: ./.github/workflows/k8s-register-with-hub.yml
+    with:
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+      cluster_name: spoke-${{ inputs.environment }}-k8s
+      env_name: spoke-${{ inputs.environment }}
+    secrets: inherit
     
   register-spoke:
     name: "register spoke with hub argocd (${{ inputs.environment }})"
-    needs: [deploy-spoke, deploy-hub, bootstrap-cluster-hub, bootstrap-cluster-spoke, bootstrap-argocd]
+    needs: [deploy-spoke, deploy-hub, bootstrap-cluster-hub, bootstrap-cluster-spoke, bootstrap-argocd, register-with-hub-spoke]
     uses: ./.github/workflows/argocd-register-spoke.yml
     with:
       spoke_cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}
       hub_env: hub-${{ inputs.environment }}
+      cluster_role: workload
+      cluster_env: ${{ inputs.environment }}
     secrets: inherit

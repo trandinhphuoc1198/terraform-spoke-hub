@@ -27,6 +27,17 @@ kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=
 kubectl wait --for=condition=Established crd/appprojects.argoproj.io --timeout=180s
 kubectl wait --for=condition=Established crd/applicationsets.argoproj.io --timeout=180s
 
+echo "=== Labeling hub (local) cluster for ApplicationSet selection ==="
+kubectl create secret generic hub-local-cluster -n "$ARGOCD_NAMESPACE" \
+  --from-literal=name=in-cluster \
+  --from-literal=server=https://kubernetes.default.svc \
+  --dry-run=client -o yaml | \
+  kubectl label --local -f - --dry-run=client -o yaml \
+    argocd.argoproj.io/secret-type=cluster \
+    cluster-role=hub \
+    cluster-env="$ENV" | \
+  kubectl apply -f -
+  
 # This is the ONLY kubectl apply of gitops-repo content that comes from CI.
 # Everything downstream — CCM, ESO, all apps — is Argo CD syncing from Git
 # continuously from this point forward.
