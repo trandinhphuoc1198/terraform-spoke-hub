@@ -148,9 +148,28 @@ jobs:
         id: cluster_name
         run: echo "value=$(terraform output -raw cluster_name)" >> "$GITHUB_OUTPUT"
 
+  bootstrap-cluster-hub:
+    name: "bootstrap cluster (hub, ${{ inputs.environment }})"
+    needs: deploy-hub
+    uses: ./.github/workflows/k8s-cluster-bootstrap.yml
+    with:
+      working_directory: live/hub
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets: inherit
+
+  bootstrap-cluster-spoke:
+    name: "bootstrap cluster (spoke, ${{ inputs.environment }})"
+    needs: deploy-spoke
+    uses: ./.github/workflows/k8s-cluster-bootstrap.yml
+    with:
+      working_directory: live/spoke
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets: inherit
   register-spoke:
     name: "register spoke with hub argocd (${{ inputs.environment }})"
-    needs: [deploy-spoke, deploy-hub]
+    needs: [deploy-spoke, deploy-hub, bootstrap-cluster-hub, bootstrap-cluster-spoke]
     uses: ./.github/workflows/argocd-register-spoke.yml
     with:
       spoke_cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}

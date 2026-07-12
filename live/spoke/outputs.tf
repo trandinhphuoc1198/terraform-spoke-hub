@@ -32,3 +32,8 @@ output "tgw_attachment_id" {
 output "cluster_name" {
   value = var.cluster_name
 }
+
+output "master_userdata" {
+  description = "Bootstrap script content for the master node (kubeadm init + CNI). Consumed by k8s-cluster-bootstrap.yml via SSM send-command — not applied automatically as EC2 user_data."
+  value       = module.k8s.master_userdata
+}
