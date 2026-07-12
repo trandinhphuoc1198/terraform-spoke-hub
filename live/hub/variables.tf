@@ -136,14 +136,3 @@ variable "certificate_arn" {
   description = "ARN of the ACM certificate used by the ALB's HTTPS listener"
   type        = string
 }
-
-variable "argocd_chart_version" {
-  description = "Pin the argo-cd Helm chart version for reproducible bootstraps"
-  type        = string
-  default     = ""
-}
-
-variable "gitops_repo_raw_url" {
-  description = "Raw content base URL for the gitops repo — passed to modules/k8s to apply Argo CD bootstrap manifests (AppProjects, root-app) right after install"
-  type        = string
-}

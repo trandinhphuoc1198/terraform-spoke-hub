@@ -19,43 +19,9 @@ variable "cni_manifest_url" {
   default     = "https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml"
 }
 
-variable "install_argocd" {
-  type        = bool
-  description = "Whether this master should bootstrap Argo CD. true for the hub cluster, false for every spoke — spokes are only ever managed BY Argo CD, never run it."
-  default     = false
-}
-
-variable "argocd_namespace" {
-  type    = string
-  default = "argocd"
-}
-
-variable "argocd_chart_version" {
-  description = "Pin the argo-cd Helm chart version. Leave empty to track latest (not recommended for prod)."
-  type        = string
-  default     = ""
-}
-
-variable "cluster_name" {
-  type        = string
-  description = "K8s cluster name — used as the key under argocd-clusters/ in Secrets Manager when register_with_hub is true"
-  default     = ""
-}
-
-variable "register_with_hub" {
-  type        = bool
-  description = "If true, master bootstrap creates an argocd-manager SA/token and pushes it to Secrets Manager for the hub's Argo CD to discover. Spokes only."
-  default     = false
-}
-
-variable "install_eso" {
-  type        = bool
-  description = "If true, master bootstrap installs External Secrets Operator and wires a ClusterSecretStore to AWS Secrets Manager. Hub only."
-  default     = false
-}
-
-variable "gitops_repo_raw_url" {
-  type        = string
-  description = "Raw content base URL for the gitops repo (e.g. https://raw.githubusercontent.com/<org>/gitops/main). Only used when install_argocd = true, to apply the bootstrap manifests (AppProjects + root-app) right after Argo CD installs."
-  default     = "https://github.com/trandinhphuoc1198/k8s_ArgoCD"
-}
+# NOTE: install_argocd, argocd_namespace, argocd_chart_version, install_eso,
+# register_with_hub, cluster_name, and gitops_repo_raw_url were removed here.
+# This module's only job now is "produce a script that gets kubeadm to a
+# Ready node with CNI." Argo CD/CCM/ESO installation and hub registration
+# move to CI-driven bootstrap steps (see .github/workflows/) and, later,
+# Argo CD Applications in the gitops repo.

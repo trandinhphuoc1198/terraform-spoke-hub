@@ -60,19 +60,15 @@ module "tgw_attachment" {
   peer_cidr_blocks      = [var.hub_vpc_cidr]
 }
 
-# ── K8s bootstrap scripts (CNI + CCM only — no Argo CD on a spoke) ────────────
+# ── K8s bootstrap scripts (kubeadm init + CNI only) ───────────────────────
 module "k8s" {
-  source            = "../../modules/k8s"
-  k8s_version       = var.k8s_version
-  pod_cidr          = var.pod_cidr
-  env               = var.env
-  cluster_name      = var.cluster_name
-  cni_manifest_url  = var.cni_manifest_url
-  install_argocd    = false
-  register_with_hub = true
+  source           = "../../modules/k8s"
+  k8s_version      = var.k8s_version
+  pod_cidr         = var.pod_cidr
+  env              = var.env
+  cni_manifest_url = var.cni_manifest_url
 }
 
-# ── EC2: master node + shared IAM/SG resources ────────────────────────────────
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
 module "ec2" {
   source                  = "../../modules/ec2"
@@ -84,7 +80,6 @@ module "ec2" {
   key_name                = var.key_name
   master_private_ip       = var.master_private_ip
   alb_sg_id               = module.alb.alb_sg_id
-  k8s_bootstrap           = module.k8s.master_userdata
   cluster_name            = var.cluster_name
   ami_id                  = module.ami.ami_id
   trusted_api_cidr_blocks = [var.hub_vpc_cidr]
