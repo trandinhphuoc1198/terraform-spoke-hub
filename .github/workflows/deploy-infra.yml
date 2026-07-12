@@ -24,6 +24,7 @@ env:
   TF_VERSION: "1.9.0"
   AWS_REGION: "ap-northeast-1"
   TF_STATE_BUCKET: "terraform-state-phuoctd6"
+  ARGOCD_CHART_VERSION: "10.1.1"
 
 jobs:
   # ── 1. Shared Transit Gateway ────────────────────────────────────────────
@@ -167,9 +168,22 @@ jobs:
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
     secrets: inherit
+
+  bootstrap-argocd:
+    name: "bootstrap argo cd (${{ inputs.environment }})"
+    needs: bootstrap-cluster-hub
+    uses: ./.github/workflows/k8s-bootstrap-argocd.yml
+    with:
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+      env_name: hub-${{ inputs.environment }}
+      argocd_chart_version: ${{ vars.ARGOCD_CHART_VERSION }}
+      gitops_repo_raw_url: https://raw.githubusercontent.com/trandinhphuoc1198/k8s_ArgoCD/main
+    secrets: inherit
+    
   register-spoke:
     name: "register spoke with hub argocd (${{ inputs.environment }})"
-    needs: [deploy-spoke, deploy-hub, bootstrap-cluster-hub, bootstrap-cluster-spoke]
+    needs: [deploy-spoke, deploy-hub, bootstrap-cluster-hub, bootstrap-cluster-spoke, bootstrap-argocd]
     uses: ./.github/workflows/argocd-register-spoke.yml
     with:
       spoke_cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}

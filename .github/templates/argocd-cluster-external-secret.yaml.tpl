@@ -14,6 +14,7 @@ spec:
       metadata:
         labels:
           argocd.argoproj.io/secret-type: cluster
+          role: spoke
       data:
         name: "{{ .name }}"
         server: "{{ .server }}"

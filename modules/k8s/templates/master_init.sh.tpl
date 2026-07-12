@@ -85,6 +85,24 @@ helm upgrade --install cilium cilium/cilium \
 echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
 kubectl wait node --all --for=condition=Ready --timeout=300s
 
+# ── AWS Cloud Controller Manager ──────────────────────────────────────────
+# Unconditional — every node registers with cloud-provider=external, so every
+# node (hub and spoke, master and workers) carries the
+# node.cloudprovider.kubernetes.io/uninitialized:NoSchedule taint until CCM
+# runs and clears it. This MUST happen before anything else tries to
+# schedule — including Argo CD's own pods, which is why this can't be an
+# Argo CD Application (Argo CD's chart ships no toleration for this taint;
+# CNI's DaemonSet does, which is why CNI is safe to apply before this step).
+echo "=== Installing AWS CCM ===" >> /var/log/kubeadm-init.log
+helm repo add aws-cloud-controller-manager https://kubernetes.github.io/cloud-provider-aws
+helm repo update
+helm upgrade --install aws-cloud-controller-manager aws-cloud-controller-manager/aws-cloud-controller-manager \
+  --namespace kube-system \
+  --set 'args={--v=2,--cloud-provider=aws,--configure-cloud-routes=false}'
+
+echo "=== Waiting for uninitialized taint to clear ===" >> /var/log/kubeadm-init.log
+timeout 120 bash -c 'until ! kubectl get nodes -o json | grep -q "node.cloudprovider.kubernetes.io/uninitialized"; do sleep 5; done'
+
 # ── Generate Structured Join Manifest and Push to SSM ───────────────────
 # This is the only "hand-off" Terraform-owned bootstrap needs to make:
 # it publishes what a worker needs to join. Everything past "node is
