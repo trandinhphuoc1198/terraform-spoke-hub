@@ -102,9 +102,6 @@ for i in $(seq 1 5); do
   sleep 10
 done
 
-echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
-kubectl wait node --all --for=condition=Ready --timeout=300s
-
 # ── AWS Cloud Controller Manager ──────────────────────────────────────────
 # Unconditional — every node registers with cloud-provider=external, so every
 # node (hub and spoke, master and workers) carries the
@@ -122,6 +119,9 @@ helm upgrade --install aws-cloud-controller-manager aws-cloud-controller-manager
 
 echo "=== Waiting for uninitialized taint to clear ===" >> /var/log/kubeadm-init.log
 timeout 120 bash -c 'until ! kubectl get nodes -o json | grep -q "node.cloudprovider.kubernetes.io/uninitialized"; do sleep 5; done'
+
+echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
+kubectl wait node --all --for=condition=Ready --timeout=180s
 
 # ── Generate Structured Join Manifest and Push to SSM ───────────────────
 # This is the only "hand-off" Terraform-owned bootstrap needs to make:
