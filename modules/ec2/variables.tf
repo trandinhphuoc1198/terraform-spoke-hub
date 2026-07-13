@@ -50,3 +50,9 @@ variable "install_eso" {
   type        = bool
   default     = false
 }
+
+variable "master_volume_size" {
+  description = "EBS volume size (in GB) for the master node root block device"
+  type        = number
+  default     = 20
+}

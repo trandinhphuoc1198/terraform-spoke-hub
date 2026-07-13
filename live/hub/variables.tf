@@ -69,6 +69,12 @@ variable "master_private_ip" {
   default     = null
 }
 
+variable "master_volume_size" {
+  description = "Root EBS volume size in GB for the master node"
+  type        = number
+  default     = 20
+}
+
 # ── ASG / Workers ─────────────────────────────────────────────────────────────
 variable "worker_instance_type" {
   description = "EC2 instance type for all worker nodes"

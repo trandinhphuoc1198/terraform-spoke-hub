@@ -19,6 +19,7 @@ worker_min         = 1
 worker_max         = 6
 worker_desired     = 1
 worker_volume_size = 20
+master_volume_size = 20
 
 k8s_version = "1.29"
 pod_cidr    = "192.168.0.0/16"

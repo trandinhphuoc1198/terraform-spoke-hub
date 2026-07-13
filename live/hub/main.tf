@@ -101,6 +101,7 @@ module "ec2" {
   master_instance_type = var.master_instance_type
   key_name             = var.key_name
   master_private_ip    = var.master_private_ip
+  master_volume_size   = var.master_volume_size
   alb_sg_id            = module.alb.alb_sg_id
   cluster_name         = var.cluster_name
   ami_id               = module.ami.ami_id
