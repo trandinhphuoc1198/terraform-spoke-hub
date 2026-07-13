@@ -14,7 +14,7 @@ spoke_vpc_cidrs = ["10.1.0.0/16"]
 
 # Smaller than the spoke — this cluster only needs to run Argo CD.
 master_instance_type = "t3.small"
-worker_instance_type = "t3.small"
+worker_instance_type = "c7i-flex.large"
 key_name             = "key"
 master_private_ip    = "10.0.11.10"
 
