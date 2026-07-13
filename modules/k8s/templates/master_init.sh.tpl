@@ -3,6 +3,7 @@ set -euo pipefail
 exec > >(tee /var/log/k8s-bootstrap.log) 2>&1
 
 export PATH=$PATH:/usr/local/bin
+echo 'alias k=kubectl' >> /home/ec2-user/.bashrc
 
 # ── Idempotency: clean any partial state from a previous failed attempt ───
 # kubeadm init isn't idempotent by default — if a prior run got far enough
@@ -98,6 +99,7 @@ for i in $(seq 1 5); do
   --version "1.16.0" \
   --namespace kube-system \
   --create-namespace \
+  --set operator.replicas=1 \
   --set kubeProxyReplacement=true \
   --set k8sServiceHost="$PRIVATE_IP" \
   --set k8sServicePort="6443" \
@@ -166,5 +168,3 @@ aws ssm put-parameter \
   --type "SecureString" \
   --overwrite \
   --region "$AWS_REGION"
-
-echo 'alias k=kubectl' >> /home/ec2-user/.bashrc
