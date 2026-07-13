@@ -135,7 +135,6 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   https_nodeport    = var.https_nodeport
-  worker_sg_id      = module.ec2.worker_sg_id
   asg_name          = module.asg.asg_name
   certificate_arn   = var.certificate_arn
   apps              = var.apps
