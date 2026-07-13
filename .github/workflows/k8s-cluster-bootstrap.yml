@@ -87,7 +87,7 @@ jobs:
             --query "Command.CommandId" --output text)
           echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
 
-          for i in $(seq 1 10); do
+          for i in $(seq 1 20); do
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$CMD_ID" \
               --instance-id "${{ steps.instance.outputs.id }}" \
