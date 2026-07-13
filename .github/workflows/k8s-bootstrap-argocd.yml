@@ -68,7 +68,7 @@ jobs:
             -e "s|__ARGOCD_CHART_VERSION__|${{ inputs.argocd_chart_version }}|g" \
             -e "s|__GITOPS_REPO_RAW_URL__|${{ inputs.gitops_repo_raw_url }}|g" \
             -e "s|__ENV__|${{ inputs.env_name }}|g" \
-            .github/scripts/bootstrap-argocd.sh.tpl > /tmp/bootstrap-argocd.sh
+            ../../.github/scripts/bootstrap-argocd.sh.tpl > /tmp/bootstrap-argocd.sh
 
       - name: Install Argo CD via SSM
         id: argocd
@@ -81,7 +81,20 @@ jobs:
             --parameters "commands=[\"echo $B64 | base64 -d > /tmp/bootstrap-argocd.sh\", \"chmod +x /tmp/bootstrap-argocd.sh\", \"/tmp/bootstrap-argocd.sh\"]" \
             --query "Command.CommandId" --output text)
           echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
-          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}"
+          
+          for i in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$CMD_ID" \
+              --instance-id "${{ steps.instance.outputs.id }}" \
+              --query "Status" --output text 2>/dev/null || echo "Pending")
+            case "$STATUS" in
+              Success) echo "Command succeeded."; exit 0 ;;
+              Failed|Cancelled|TimedOut) echo "::error::Command ended with status $STATUS"; exit 1 ;;
+              *) echo "Status: $STATUS (attempt $i/90)"; sleep 10 ;;
+            esac
+          done
+          echo "::error::Timed out waiting for command completion"
+          exit 1
 
       - name: Show output on failure
         if: failure()
@@ -96,7 +109,7 @@ jobs:
           sed \
             -e "s|__AWS_REGION__|${{ inputs.aws_region }}|g" \
             -e "s|__ENV__|${{ inputs.env_name }}|g" \
-            .github/scripts/bootstrap-eso-secret.sh.tpl > /tmp/bootstrap-eso-secret.sh
+            ../../.github/scripts/bootstrap-eso-secret.sh.tpl > /tmp/bootstrap-eso-secret.sh
 
       - name: Seed ESO aws-creds secret via SSM
         run: |

@@ -10,9 +10,8 @@ on:
       - ".tflint.hcl"
       - ".github/workflows/terraform.yml"
   push:
-    # branches:
-    #   - main
   workflow_dispatch:
+
 jobs:
   fmt-check:
     runs-on: ubuntu-latest
@@ -58,9 +57,15 @@ jobs:
       - uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: "v0.53.0"
-      - run: tflint --init --config ${{ github.workspace }}/.tflint.hcl
+          
+      - name: tflint init
+        run: tflint --init --config ${{ github.workspace }}/.tflint.hcl
         working-directory: ${{ matrix.root }}
-      - run: tflint --config ${{ github.workspace }}/.tflint.hcl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: tflint run
+        run: tflint --config ${{ github.workspace }}/.tflint.hcl
         working-directory: ${{ matrix.root }}
 
   # Static checks only — no AWS credentials in CI, so this can't actually
@@ -105,4 +110,4 @@ jobs:
         with:
           scan-type: config
           scan-ref: .
-          skip-dirs: ""
+          
