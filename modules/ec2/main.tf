@@ -408,9 +408,10 @@ resource "aws_iam_user_policy" "eso_reader" {
 }
 
 resource "aws_secretsmanager_secret" "eso_bootstrap_creds" {
-  count = var.install_eso ? 1 : 0
-  name  = "${var.env}/eso/bootstrap-credentials"
-  tags  = { Env = var.env }
+  count                   = var.install_eso ? 1 : 0
+  name                    = "${var.env}/eso/bootstrap-credentials"
+  recovery_window_in_days = 0
+  tags                    = { Env = var.env }
 }
 
 resource "aws_secretsmanager_secret_version" "eso_bootstrap_creds" {
