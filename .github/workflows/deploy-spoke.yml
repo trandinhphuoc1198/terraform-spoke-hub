@@ -124,9 +124,9 @@ jobs:
       env_name: spoke-${{ inputs.environment }}
     secrets: inherit
 
-  # ── 4. register the cluster Secret in the hub's Argo CD ──────────────────
+  # ── 4. verify ArgoCD registered the spoke ─────────────────────────────────
   register-spoke:
-    name: "register spoke with hub argocd (${{ inputs.environment }})"
+    name: "verify spoke registered with hub argocd (${{ inputs.environment }})"
     needs: [deploy-spoke, register-with-hub-spoke]
     uses: ./.github/workflows/argocd-register-spoke.yml
     with:

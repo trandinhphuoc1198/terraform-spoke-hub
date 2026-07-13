@@ -67,6 +67,7 @@ jobs:
             -e "s|__ARGOCD_NAMESPACE__|${{ inputs.argocd_namespace }}|g" \
             -e "s|__ARGOCD_CHART_VERSION__|${{ inputs.argocd_chart_version }}|g" \
             -e "s|__GITOPS_REPO_RAW_URL__|${{ inputs.gitops_repo_raw_url }}|g" \
+            -e "s|__ENV__|${{ inputs.env_name }}|g" \
             .github/scripts/bootstrap-argocd.sh.tpl > /tmp/bootstrap-argocd.sh
 
       - name: Install Argo CD via SSM

@@ -6,6 +6,7 @@ export PATH=$PATH:/usr/local/bin
 ARGOCD_NAMESPACE="__ARGOCD_NAMESPACE__"
 ARGOCD_CHART_VERSION="__ARGOCD_CHART_VERSION__"
 GITOPS_REPO_RAW_URL="__GITOPS_REPO_RAW_URL__"
+ENV="__ENV__"
 
 echo "=== Installing Argo CD ==="
 helm repo add argo https://argoproj.github.io/argo-helm
@@ -37,7 +38,7 @@ kubectl create secret generic hub-local-cluster -n "$ARGOCD_NAMESPACE" \
     cluster-role=hub \
     cluster-env="$ENV" | \
   kubectl apply -f -
-  
+
 # This is the ONLY kubectl apply of gitops-repo content that comes from CI.
 # Everything downstream — CCM, ESO, all apps — is Argo CD syncing from Git
 # continuously from this point forward.
@@ -45,4 +46,7 @@ echo "=== Applying Argo CD bootstrap manifests from gitops repo ==="
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/projects/platform-infra.yaml"
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/projects/platform-apps.yaml"
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/projects/platform-hub.yaml"
-kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/root-apps/"
+
+kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/root-apps/root-hub.yaml"
+kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/root-apps/root-spokes.yaml"
+kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/root-apps/root-clusters.yaml"
