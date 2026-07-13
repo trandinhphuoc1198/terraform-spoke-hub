@@ -85,10 +85,10 @@ module "tgw_attachment" {
 # ── K8s bootstrap scripts (kubeadm init + CNI only — CCM/ArgoCD/ESO moved
 # to CI-driven bootstrap steps; see modules/k8s/variables.tf note) ───────────
 module "k8s" {
-  source           = "../../modules/k8s"
-  k8s_version      = var.k8s_version
-  pod_cidr         = var.pod_cidr
-  env              = var.env
+  source      = "../../modules/k8s"
+  k8s_version = var.k8s_version
+  pod_cidr    = var.pod_cidr
+  env         = var.env
 }
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
