@@ -10,8 +10,8 @@ on:
       - ".tflint.hcl"
       - ".github/workflows/terraform.yml"
   push:
-    branches:
-      - main
+    # branches:
+    #   - main
   workflow_dispatch:
 jobs:
   fmt-check:
