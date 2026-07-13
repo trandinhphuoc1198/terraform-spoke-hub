@@ -100,7 +100,7 @@ for i in $(seq 1 5); do
     --set kubeProxyReplacement=true \
     --set k8sServiceHost="$PRIVATE_IP" \
     --set k8sServicePort="6443" \
-    --set tunnel=disabled \
+    --set routingMode=tunnel \
     --set ipam.mode=kubernetes \
     --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \
     --set bpf.masquerade=true \
