@@ -94,18 +94,18 @@ module "k8s" {
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
 module "ec2" {
-  source                  = "../../modules/ec2"
-  env                     = var.env
-  vpc_id                  = module.vpc.vpc_id
-  vpc_cidr                = var.vpc_cidr
-  private_subnet_ids      = module.vpc.private_subnet_ids
-  master_instance_type    = var.master_instance_type
-  key_name                = var.key_name
-  master_private_ip       = var.master_private_ip
-  alb_sg_id               = module.alb.alb_sg_id
-  cluster_name            = var.cluster_name
-  ami_id                  = module.ami.ami_id
-  install_eso             = true
+  source               = "../../modules/ec2"
+  env                  = var.env
+  vpc_id               = module.vpc.vpc_id
+  vpc_cidr             = var.vpc_cidr
+  private_subnet_ids   = module.vpc.private_subnet_ids
+  master_instance_type = var.master_instance_type
+  key_name             = var.key_name
+  master_private_ip    = var.master_private_ip
+  alb_sg_id            = module.alb.alb_sg_id
+  cluster_name         = var.cluster_name
+  ami_id               = module.ami.ami_id
+  install_eso          = true
 }
 
 # ── ASG: worker node Auto Scaling Group ───────────────────────────────────────

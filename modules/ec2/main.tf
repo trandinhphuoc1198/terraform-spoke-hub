@@ -82,7 +82,7 @@ resource "aws_security_group_rule" "master_egress_all" {
   description       = "All outbound"
   type              = "egress"
   from_port         = 0
-  to_port            = 0
+  to_port           = 0
   protocol          = "-1"
   security_group_id = aws_security_group.master.id
   cidr_blocks       = ["0.0.0.0/0"]
