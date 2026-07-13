@@ -58,6 +58,22 @@ cp /etc/kubernetes/admin.conf /home/ec2-user/.kube/config
 chown ec2-user:ec2-user /home/ec2-user/.kube/config
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
+# ── Wait for apiserver to be consistently reachable ───────────────────────
+# kubeadm init can finish with a brief window where the apiserver is still
+# cycling (e.g. kubelet restarting to pick up the rotated client cert in
+# [kubelet-finalize]). Racing straight into `helm install` against it can
+# hit a transient "connection refused" / GOAWAY. Wait for a stable
+# response before proceeding.
+echo "=== Waiting for apiserver to be consistently reachable ===" >> /var/log/kubeadm-init.log
+for i in $(seq 1 30); do
+  if kubectl get --raw='/readyz' >/dev/null 2>&1; then
+    echo "apiserver is ready (attempt $i)" >> /var/log/kubeadm-init.log
+    break
+  fi
+  echo "apiserver not ready yet, retrying in 5s (attempt $i/30)..." >> /var/log/kubeadm-init.log
+  sleep 5
+done
+
 # ── CNI ─────────────────────────────────────────────────────────────────
 # Unconditional — every cluster (hub and spoke) needs pod networking to
 # reach Ready, regardless of whether it also runs Argo CD/CCM/ESO.
