@@ -95,21 +95,30 @@ helm repo update
 
 for i in $(seq 1 5); do
   helm upgrade --install cilium cilium/cilium \
-    --version  "1.16.0" \
-    --namespace kube-system \
-    --set kubeProxyReplacement=true \
-    --set k8sServiceHost="$PRIVATE_IP" \
-    --set k8sServicePort="6443" \
-    --set routingMode=tunnel \
-    --set ipam.mode=kubernetes \
-    --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \
-    --set bpf.masquerade=true \
-    --set hubble.enabled=true \
-    --set hubble.relay.enabled=true \
-    --set hubble.ui.enabled=true \
-    --set hubble.metrics.enabled="{dns:query;ignoreAAAA,drop,tcp,flow,icmp,http}" \
-    --wait \
-    --timeout 5m && break
+  --version "1.16.0" \
+  --namespace kube-system \
+  --create-namespace \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost="$PRIVATE_IP" \
+  --set k8sServicePort="6443" \
+  --set routingMode=tunnel \
+  --set ipam.mode=kubernetes \
+  --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \
+  --set nodePort.enabled=true \
+  --set nodePort.range="30000\,32767" \
+  --set bpf.masquerade=true \
+  --set enableIPv4Masquerade=true \
+  --set enableIPv6Masquerade=false \
+  --set resources.requests.cpu=100m \
+  --set resources.requests.memory=128Mi \
+  --set resources.limits.cpu=500m \
+  --set resources.limits.memory=256Mi \
+  --set identityAllocationMode=crd \
+  --set encryption.enabled=true \
+  --set encryption.type=wireguard \
+  --set rollOutCiliumPods=true \
+  --wait \
+  --timeout=10m && break
   echo "Cilium install attempt $i failed, retrying in 10s..." >> /var/log/kubeadm-init.log
   sleep 10
 done
