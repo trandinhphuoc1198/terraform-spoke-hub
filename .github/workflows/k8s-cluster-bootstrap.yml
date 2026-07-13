@@ -3,14 +3,14 @@ name: k8s-cluster-bootstrap
 # Runs kubeadm init + CNI on a cluster's master via SSM send-command,
 # instead of user_data. This is what makes a bootstrap failure show up as
 # a failed CI job with logs, instead of hiding in cloud-init on a box
-# nobody's watching. Called by deploy-infra.yml after the corresponding
-# `terraform apply` (deploy-hub / deploy-spoke), before register-spoke.
+# nobody's watching. Called by deploy-hub.yml / deploy-spoke.yml after the
+# corresponding `terraform apply`, before hub/argocd registration steps.
 
 on:
   workflow_call:
     inputs:
       working_directory:
-        description: "live/hub or live/spoke"
+        description: "live/hub, live/spoke, or any other spoke root (e.g. live/spoke-2)"
         type: string
         required: true
       environment:

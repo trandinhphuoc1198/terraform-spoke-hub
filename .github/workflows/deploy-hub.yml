@@ -1,0 +1,98 @@
+name: deploy-hub
+
+# Deploys/updates the hub cluster ONLY: live/hub terraform apply, kubeadm
+# bootstrap, then Argo CD install. Does not touch live/spoke and does not
+# re-apply global/network (it only reads that state via
+# terraform_remote_state — global/network must already exist; run
+# deploy-network.yml first if this is a brand-new environment).
+#
+# Run this on its own for any hub-only change (instance type, worker
+# counts, apps map, cert ARN, etc). Use deploy-all.yml only for first-time
+# bring-up of a whole new environment.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which envs/<environment> folder to deploy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.9.0"
+  AWS_REGION: "ap-northeast-1"
+
+jobs:
+  # ── 1. live/hub terraform apply ──────────────────────────────────────────
+  deploy-hub:
+    name: "hub infra (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: live/hub
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan
+        run: |
+          terraform plan \
+            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
+            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
+            -out=tfplan
+
+      - name: terraform apply
+        run: terraform apply -auto-approve tfplan
+
+  # ── 2. kubeadm init + CNI on the hub master ──────────────────────────────
+  bootstrap-cluster-hub:
+    name: "bootstrap cluster (hub, ${{ inputs.environment }})"
+    needs: deploy-hub
+    uses: ./.github/workflows/k8s-cluster-bootstrap.yml
+    with:
+      working_directory: live/hub
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets: inherit
+
+  # ── 3. Argo CD install (hub only, one-time/idempotent) ──────────────────
+  bootstrap-argocd:
+    name: "bootstrap argo cd (${{ inputs.environment }})"
+    needs: bootstrap-cluster-hub
+    uses: ./.github/workflows/k8s-bootstrap-argocd.yml
+    with:
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+      env_name: hub-${{ inputs.environment }}
+      argocd_chart_version: ${{ vars.ARGOCD_CHART_VERSION }}
+      gitops_repo_raw_url: https://raw.githubusercontent.com/trandinhphuoc1198/k8s_ArgoCD/main
+    secrets: inherit

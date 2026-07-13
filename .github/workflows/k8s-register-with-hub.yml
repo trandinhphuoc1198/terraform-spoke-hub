@@ -2,12 +2,16 @@ name: k8s-register-with-hub
 
 # Spoke only. Creates the argocd-manager SA on the spoke, pushes the
 # initial registration token to Secrets Manager, and installs a host-level
-# rotation timer. Must run before register-spoke.yml, which reads the
-# secret this job creates.
+# rotation timer. Must run before argocd-register-spoke.yml, which reads
+# the secret this job creates. Called by deploy-spoke.yml.
 
 on:
   workflow_call:
     inputs:
+      working_directory:
+        description: "Path to the spoke root, e.g. live/spoke or live/spoke-2 — CHANGED: previously hardcoded to live/spoke"
+        type: string
+        default: "live/spoke"
       environment:
         type: string
         required: true
@@ -35,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: live/spoke
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@v4
 

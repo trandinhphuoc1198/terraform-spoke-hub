@@ -1,0 +1,137 @@
+name: deploy-spoke
+
+# Deploys/updates ONE spoke cluster: terraform apply, kubeadm bootstrap,
+# push registration token to Secrets Manager, then register the cluster
+# Secret in the hub's Argo CD. Does not touch live/hub and does not
+# re-apply global/network.
+#
+# Requires the hub's Argo CD to already be installed (deploy-hub.yml) —
+# that's a real dependency (this cluster is registering *into* the hub's
+# Argo CD), not just a CI artifact. For a brand-new environment, run
+# deploy-all.yml instead, or run deploy-hub.yml once first.
+#
+# `spoke_dir` lets this same workflow drive additional spokes later
+# (e.g. live/spoke-2) without copy-pasting new workflow jobs — see the
+# README's "Adding a second spoke later" section.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which envs/<environment> folder to deploy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      spoke_dir:
+        description: "Path to the spoke root to operate on"
+        required: false
+        type: string
+        default: "live/spoke"
+      cluster_role:
+        description: "Label value for cluster-role, e.g. workload"
+        required: true
+        type: string
+        default: "workload"
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      spoke_dir:
+        type: string
+        default: "live/spoke"
+      cluster_role:
+        type: string
+        default: "workload"
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.9.0"
+  AWS_REGION: "ap-northeast-1"
+
+jobs:
+  # ── 1. spoke terraform apply ─────────────────────────────────────────────
+  deploy-spoke:
+    name: "spoke infra (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      cluster_name: ${{ steps.cluster_name.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        working-directory: ${{ inputs.spoke_dir }}
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan
+        working-directory: ${{ inputs.spoke_dir }}
+        run: |
+          terraform plan \
+            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
+            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
+            -out=tfplan
+
+      - name: terraform apply
+        working-directory: ${{ inputs.spoke_dir }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Capture cluster_name output
+        id: cluster_name
+        working-directory: ${{ inputs.spoke_dir }}
+        run: echo "value=$(terraform output -raw cluster_name)" >> "$GITHUB_OUTPUT"
+
+  # ── 2. kubeadm init + CNI on the spoke master ────────────────────────────
+  bootstrap-cluster-spoke:
+    name: "bootstrap cluster (spoke, ${{ inputs.environment }})"
+    needs: deploy-spoke
+    uses: ./.github/workflows/k8s-cluster-bootstrap.yml
+    with:
+      working_directory: ${{ inputs.spoke_dir }}
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets: inherit
+
+  # ── 3. push argocd-manager token to Secrets Manager + rotation timer ────
+  register-with-hub-spoke:
+    name: "register spoke with hub (secrets manager) — ${{ inputs.environment }}"
+    needs: [bootstrap-cluster-spoke, deploy-spoke]
+    uses: ./.github/workflows/k8s-register-with-hub.yml
+    with:
+      working_directory: ${{ inputs.spoke_dir }}
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+      cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}
+      env_name: spoke-${{ inputs.environment }}
+    secrets: inherit
+
+  # ── 4. register the cluster Secret in the hub's Argo CD ──────────────────
+  register-spoke:
+    name: "register spoke with hub argocd (${{ inputs.environment }})"
+    needs: [deploy-spoke, register-with-hub-spoke]
+    uses: ./.github/workflows/argocd-register-spoke.yml
+    with:
+      spoke_cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}
+      hub_env: hub-${{ inputs.environment }}
+      cluster_role: ${{ inputs.cluster_role }}
+      cluster_env: ${{ inputs.environment }}
+    secrets: inherit

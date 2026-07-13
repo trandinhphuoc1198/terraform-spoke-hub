@@ -1,0 +1,61 @@
+name: deploy-all
+
+# FIRST-TIME BRING-UP ONLY. Chains network -> hub -> spoke in the order
+# described in the README ("Apply order (first time)"). For any day-2
+# change to a single cluster, use deploy-network.yml, deploy-hub.yml, or
+# deploy-spoke.yml directly instead — those run independently and don't
+# force an unrelated cluster's jobs (terraform apply, kubeadm bootstrap,
+# Argo CD helm upgrade, etc.) to re-run alongside your change.
+#
+# This replaces the old deploy-infra.yml, which mixed hub and spoke jobs
+# into one non-reusable DAG — that meant a spoke-only change always forced
+# hub's bootstrap-argocd job to run too, and adding a second spoke meant
+# hand-duplicating four more jobs into that file. deploy-spoke.yml's
+# `spoke_dir` input solves the second problem; splitting into separate
+# workflows solves the first.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which envs/<environment> folder to deploy (backend.hcl + terraform.tfvars must exist for it in every root)"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      spoke_dir:
+        description: "Path to the spoke root to bring up"
+        required: false
+        type: string
+        default: "live/spoke"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  network:
+    name: "1. network"
+    uses: ./.github/workflows/deploy-network.yml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  hub:
+    name: "2. hub"
+    needs: network
+    uses: ./.github/workflows/deploy-hub.yml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  spoke:
+    name: "3. spoke"
+    needs: [network, hub]
+    uses: ./.github/workflows/deploy-spoke.yml
+    with:
+      environment: ${{ inputs.environment }}
+      spoke_dir: ${{ inputs.spoke_dir }}
+    secrets: inherit

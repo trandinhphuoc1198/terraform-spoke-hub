@@ -4,7 +4,7 @@ name: k8s-bootstrap-argocd
 # imperative step; everything after this is Argo CD syncing from Git).
 # Also seeds the aws-creds Secret ESO needs — the one piece that can't
 # come from ESO itself. Runs once per hub environment, idempotent via
-# helm upgrade --install / kubectl apply.
+# helm upgrade --install / kubectl apply. Called by deploy-hub.yml.
 
 on:
   workflow_call:
