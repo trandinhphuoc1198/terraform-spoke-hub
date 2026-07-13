@@ -58,8 +58,41 @@ cp /etc/kubernetes/admin.conf /home/ec2-user/.kube/config
 chown ec2-user:ec2-user /home/ec2-user/.kube/config
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
-%{ if install_argocd ~}
+# ── CNI ─────────────────────────────────────────────────────────────────
+# Unconditional — every cluster (hub and spoke) needs pod networking to
+# reach Ready, regardless of whether it also runs Argo CD/CCM/ESO.
+echo "=== Installing CNI ===" >> /var/log/kubeadm-init.log
+helm repo add cilium https://helm.cilium.io/
+helm repo update
+
+helm upgrade --install cilium cilium/cilium \
+  --version  "1.16.0" \
+  --namespace kube-system \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost="$PRIVATE_IP" \
+  --set k8sServicePort="6443" \
+  --set tunnel=disabled \
+  --set ipam.mode=kubernetes \
+  --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \
+  --set bpf.masquerade=true \
+  --set hubble.enabled=true \
+  --set hubble.relay.enabled=true \
+  --set hubble.ui.enabled=true \
+  --set hubble.metrics.enabled="{dns:query;ignoreAAAA,drop,tcp,flow,icmp,http}" \
+  --wait \
+  --timeout 5m
+
+echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
+kubectl wait node --all --for=condition=Ready --timeout=300s
+
 # ── AWS Cloud Controller Manager ──────────────────────────────────────────
+# Unconditional — every node registers with cloud-provider=external, so every
+# node (hub and spoke, master and workers) carries the
+# node.cloudprovider.kubernetes.io/uninitialized:NoSchedule taint until CCM
+# runs and clears it. This MUST happen before anything else tries to
+# schedule — including Argo CD's own pods, which is why this can't be an
+# Argo CD Application (Argo CD's chart ships no toleration for this taint;
+# CNI's DaemonSet does, which is why CNI is safe to apply before this step).
 echo "=== Installing AWS CCM ===" >> /var/log/kubeadm-init.log
 helm repo add aws-cloud-controller-manager https://kubernetes.github.io/cloud-provider-aws
 helm repo update
@@ -67,148 +100,14 @@ helm upgrade --install aws-cloud-controller-manager aws-cloud-controller-manager
   --namespace kube-system \
   --set 'args={--v=2,--cloud-provider=aws,--configure-cloud-routes=false}'
 
-# ── CNI Implementation ───────────────────────────────────────────────────
-echo "=== Installing CNI ===" >> /var/log/kubeadm-init.log
-kubectl apply -f ${cni_manifest_url}
-  
-echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
-kubectl wait node --all --for=condition=Ready --timeout=300s
-
-# ── Argo CD Setup (Hub Only) ──────────────────────────────────────────────
-echo "=== Installing Argo CD ===" >> /var/log/kubeadm-init.log
-helm repo add argo https://argoproj.github.io/argo-helm
-helm repo update
-
-helm upgrade --install argocd argo/argo-cd \
-  --namespace ${argocd_namespace} \
-  --create-namespace \
-  %{ if argocd_chart_version != "" ~}
-  --version "${argocd_chart_version}" \
-  %{ endif ~}
-  --set configs.params."server\.insecure"=true
-
-# ── Bootstrap Argo CD's own reconciliation loop ───────────────────────────
-# From this point forward, Argo CD (not Terraform) owns everything under
-# apps/infra and apps/workloads in the gitops repo. This is the ONLY
-# kubectl apply of gitops-repo content that ever comes from Terraform —
-# everything downstream is Argo CD syncing from Git continuously.
-echo "=== Waiting for Argo CD CRDs to be ready ===" >> /var/log/kubeadm-init.log
-kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=180s
-kubectl wait --for=condition=Established crd/appprojects.argoproj.io --timeout=180s
-kubectl wait --for=condition=Established crd/applicationsets.argoproj.io --timeout=180s
-
-echo "=== Applying Argo CD bootstrap manifests from gitops repo ===" >> /var/log/kubeadm-init.log
-kubectl apply -f "${gitops_repo_raw_url}/argocd/projects/platform-infra.yaml"
-kubectl apply -f "${gitops_repo_raw_url}/argocd/projects/platform-apps.yaml"
-kubectl apply -f "${gitops_repo_raw_url}/argocd/root-app.yaml"
-%{ endif ~}
-
-%{ if install_eso ~}
-# ── External Secrets Operator Setup (Hub Only) ────────────────────────────
-echo "=== Installing External Secrets Operator ===" >> /var/log/kubeadm-init.log
-helm repo add external-secrets https://charts.external-secrets.io
-helm repo update
-helm upgrade --install external-secrets external-secrets/external-secrets \
-  --namespace external-secrets --create-namespace
-
-ESO_CREDS=$(aws secretsmanager get-secret-value \
-  --secret-id "${env}/eso/bootstrap-credentials" \
-  --region "$AWS_REGION" --query SecretString --output text)
-ESO_ACCESS_KEY=$(echo "$ESO_CREDS" | jq -r .access_key_id)
-ESO_SECRET_KEY=$(echo "$ESO_CREDS" | jq -r .secret_access_key)
-
-kubectl create secret generic aws-creds -n external-secrets \
-  --from-literal=access-key-id="$ESO_ACCESS_KEY" \
-  --from-literal=secret-access-key="$ESO_SECRET_KEY" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-cat <<EOF | kubectl apply -f -
-apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: argocd-clusters-store
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: "$AWS_REGION"
-      auth:
-        secretRef:
-          accessKeyIDSecretRef:
-            name: aws-creds
-            namespace: external-secrets
-            key: access-key-id
-          secretAccessKeySecretRef:
-            name: aws-creds
-            namespace: external-secrets
-            key: secret-access-key
-EOF
-%{ endif ~}
-
-%{ if register_with_hub ~}
-# ── Hub Cluster Token Registration (Spokes Only) ──────────────────────────
-echo "=== Creating argocd-manager service account ===" >> /var/log/kubeadm-init.log
-kubectl create namespace argocd-manager --dry-run=client -o yaml | kubectl apply -f -
-kubectl create serviceaccount argocd-manager -n argocd-manager --dry-run=client -o yaml | kubectl apply -f -
-kubectl create clusterrolebinding argocd-manager-binding \
-  --clusterrole=cluster-admin \
-  --serviceaccount=argocd-manager:argocd-manager \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-cat <<'ROTATE' > /usr/local/bin/push-argocd-registration.sh
-#!/bin/bash
-set -euo pipefail
-export KUBECONFIG=/etc/kubernetes/admin.conf
-IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
-MASTER_IP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
-
-TOKEN=$(kubectl create token argocd-manager -n argocd-manager --duration=2160h)
-CA_DATA=$(kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
-SECRET_NAME="argocd-clusters/${cluster_name}"
-SERVER_URL="https://$MASTER_IP:6443"
-
-PAYLOAD=$(jq -n \
-  --arg name "${cluster_name}" \
-  --arg server "$SERVER_URL" \
-  --arg token "$TOKEN" \
-  --arg ca "$CA_DATA" \
-  '{name:$name, server:$server, token:$token, caData:$ca}')
-
-aws secretsmanager put-secret-value \
-  --secret-id "$SECRET_NAME" \
-  --secret-string "$PAYLOAD" \
-  --region "$AWS_REGION" 2>/dev/null || \
-aws secretsmanager create-secret \
-  --name "$SECRET_NAME" \
-  --secret-string "$PAYLOAD" \
-  --tags Key=ManagedBy,Value=k8s-bootstrap Key=ClusterName,Value=${cluster_name} Key=Purpose,Value=argocd-registration \
-  --region "$AWS_REGION"
-ROTATE
-chmod +x /usr/local/bin/push-argocd-registration.sh
-/usr/local/bin/push-argocd-registration.sh
-
-cat <<'TIMERUNIT' > /etc/systemd/system/argocd-registration-rotate.timer
-[Unit]
-Description=Rotate argocd-manager token every 30 days
-[Timer]
-OnCalendar=*-*-1..28/30 03:00:00
-Persistent=true
-[Install]
-WantedBy=timers.target
-TIMERUNIT
-cat <<'SERVICEUNIT' > /etc/systemd/system/argocd-registration-rotate.service
-[Unit]
-Description=Push refreshed argocd-manager token to Secrets Manager
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/push-argocd-registration.sh
-SERVICEUNIT
-systemctl daemon-reload
-systemctl enable --now argocd-registration-rotate.timer
-%{ endif ~}
+echo "=== Waiting for uninitialized taint to clear ===" >> /var/log/kubeadm-init.log
+timeout 120 bash -c 'until ! kubectl get nodes -o json | grep -q "node.cloudprovider.kubernetes.io/uninitialized"; do sleep 5; done'
 
 # ── Generate Structured Join Manifest and Push to SSM ───────────────────
+# This is the only "hand-off" Terraform-owned bootstrap needs to make:
+# it publishes what a worker needs to join. Everything past "node is
+# Ready" (CCM, Argo CD, ESO, hub registration) is intentionally NOT here
+# anymore — see modules/k8s/README.md for where each of those now lives.
 echo "=== Pushing JSON Join Payload to SSM ===" >> /var/log/kubeadm-init.log
 TOKEN=$(kubeadm token create --ttl 24h)
 CA_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | sha256sum | awk '{print $1}')

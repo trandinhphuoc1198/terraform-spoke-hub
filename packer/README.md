@@ -5,13 +5,12 @@ worker nodes (`modules/asg`) in every environment (hub and every spoke).
 
 ## What's baked in vs. what stays dynamic
 
-| Baked into the AMI (this Packer build) | Stays in `modules/k8s` user_data (runtime) |
+| Baked into the AMI (this Packer build) | Stays dynamic, but moved out of Terraform (this repo's Phase 1–4 refactor) |
 |---|---|
-| swap disabled, kernel modules, sysctl | `kubeadm init` / `kubeadm join` |
+| swap disabled, kernel modules, sysctl | `kubeadm init` / `kubeadm join` — now CI-driven via SSM, not `user_data`, for master (worker stays `user_data`, see modules/k8s/README.md) |
 | containerd (SystemdCgroup=true) | CNI manifest apply |
-| kubeadm, kubelet, kubectl | AWS CCM install (Helm) |
-| kubelet enabled | Argo CD install on the hub (Helm) |
-| | join-token SSM read/write |
+| kubeadm, kubelet, kubectl | AWS CCM, Argo CD, ESO installs — now Argo CD `ApplicationSet`s / one-time CI steps, not Terraform |
+| kubelet enabled | join-token SSM read/write |
 
 The runtime pieces stay dynamic because they're per-instance (provider-id,
 private IP) or depend on coordination between the master and workers at
@@ -56,3 +55,4 @@ the newest successful build — no AMI ID to copy/paste into tfvars.
   AMI change requires a manual `terraform apply` + rejoin/verify, same as
   before this change (this was already true when the AMI came from the
   SSM lookup).
+

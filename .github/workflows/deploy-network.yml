@@ -1,0 +1,68 @@
+name: deploy-network
+
+# Shared Transit Gateway (global/network). Applied rarely — only when the
+# TGW itself changes (e.g. adding amazon_side_asn changes, which shouldn't
+# happen often) or on first-time bring-up. Independent of hub/spoke: run
+# this on its own, don't bundle it into every hub/spoke change.
+#
+# NOTE: this is the piece both live/hub and live/spoke read via
+# terraform_remote_state — it must exist before either of those roots is
+# applied for the first time (see deploy-all.yml for full bring-up order).
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which envs/<environment> folder to deploy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.9.0"
+  AWS_REGION: "ap-northeast-1"
+
+jobs:
+  deploy-network:
+    name: "network (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: global/network
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan
+        run: terraform plan -var="env_prefix=${{ inputs.environment }}" -out=tfplan
+
+      - name: terraform apply
+        run: terraform apply -auto-approve tfplan

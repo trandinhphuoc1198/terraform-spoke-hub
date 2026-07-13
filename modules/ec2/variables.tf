@@ -5,7 +5,6 @@ variable "private_subnet_ids" { type = list(string) }
 variable "master_instance_type" { type = string }
 variable "key_name" { type = string }
 variable "alb_sg_id" { type = string }
-variable "k8s_bootstrap" { type = string }
 variable "cluster_name" { type = string }
 variable "master_private_ip" {
   type    = string
@@ -16,6 +15,12 @@ variable "ami_id" {
   description = "AMI ID for the master node — the shared Packer-built k8s base image (see /packer and modules/ami). Replaces the previous dynamic SSM AL2023 lookup."
   type        = string
 }
+
+# NOTE: k8s_bootstrap was removed. The master no longer self-bootstraps via
+# user_data — kubeadm init/CNI now runs via the k8s-cluster-bootstrap.yml
+# CI workflow (SSM send-command), using module.k8s.master_userdata as the
+# script content. This makes a failed bootstrap fail a CI job with logs,
+# instead of failing silently inside cloud-init on a box nobody's watching.
 
 variable "trusted_api_cidr_blocks" {
   description = <<-EOT

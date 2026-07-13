@@ -110,12 +110,6 @@ variable "pod_cidr" {
   default     = "192.168.0.0/16"
 }
 
-variable "cni_manifest_url" {
-  description = "Manifest URL applied right after kubeadm init to bring up pod networking"
-  type        = string
-  default     = "https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml"
-}
-
 # ── ALB / Ingress ─────────────────────────────────────────────────────────────
 variable "https_nodeport" {
   description = "Kubernetes HTTPS NodePort the ALB target groups forward to (for NGINX Ingress)"
@@ -134,16 +128,5 @@ variable "apps" {
 
 variable "certificate_arn" {
   description = "ARN of the ACM certificate used by the ALB's HTTPS listener"
-  type        = string
-}
-
-variable "argocd_chart_version" {
-  description = "Pin the argo-cd Helm chart version for reproducible bootstraps"
-  type        = string
-  default     = ""
-}
-
-variable "gitops_repo_raw_url" {
-  description = "Raw content base URL for the gitops repo — passed to modules/k8s to apply Argo CD bootstrap manifests (AppProjects, root-app) right after install"
   type        = string
 }

@@ -174,12 +174,6 @@ resource "aws_iam_role_policy" "master_ccm_policy" {
   name = "${var.env}-k8s-master-ccm-policy"
   role = aws_iam_role.master.id
 
-  # NOTE ON SCOPING: EC2's Describe* actions don't support resource-level
-  # permissions at all (AWS IAM limitation, not something Terraform/HCL can
-  # work around) — Resource "*" is unavoidable for those. The *mutating*
-  # actions below ARE scoped: they're conditioned on the resource carrying
-  # this cluster's ownership tag, so this role can't touch security groups
-  # or instances belonging to a different cluster in the same account.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -284,10 +278,6 @@ resource "aws_iam_role_policy" "worker_ebs" {
           Resource = aws_ssm_parameter.cluster_join_token.arn
         }
       ],
-      # S3 access is scoped to the specific buckets this cluster owns,
-      # passed in from the root module — never a account-wide wildcard.
-      # If no buckets are passed (e.g. the hub cluster), this statement
-      # is simply omitted rather than falling back to Resource "*".
       length(var.s3_bucket_arns) > 0 ? [
         {
           Sid    = "S3Access"
@@ -303,7 +293,6 @@ resource "aws_iam_role_policy" "worker_ebs" {
   })
 }
 
-# ASG permissions — Cluster Autoscaler runs on master and needs these
 resource "aws_iam_role_policy" "master_autoscaler" {
   name = "${var.env}-k8s-master-autoscaler-policy"
   role = aws_iam_role.master.id
@@ -337,16 +326,18 @@ resource "aws_iam_instance_profile" "worker" {
 resource "aws_instance" "master" {
   # AMI is the shared, Packer-built k8s base image (containerd/kubeadm/
   # kubelet/kubectl + node prep baked in) — see /packer and modules/ami.
-  # No dynamic SSM lookup here anymore, so both this instance and every
-  # worker launched by modules/asg come from the exact same image.
+  #
+  # NOTE: no user_data here anymore. kubelet is enabled by the AMI but sits
+  # idle (no /etc/kubernetes/kubelet.conf yet) until the k8s-cluster-bootstrap.yml
+  # CI workflow runs kubeadm init via SSM send-command, using
+  # module.k8s.master_userdata as the script content. This makes a failed
+  # bootstrap fail a CI job with logs, instead of failing silently inside
+  # cloud-init. See modules/k8s/README.md.
   #
   # Master lives in a private subnet, same as workers — no public IP.
   # Reached exclusively via SSM Session Manager (see the unconditional
   # aws_iam_role_policy_attachment.master_ssm above); SSH stays available
   # only as a VPC-internal fallback (see master_ingress_ssh above).
-  # Outbound internet (kubeadm/yum/SSM heartbeat has an interface-endpoint
-  # path too — see modules/vpc) flows through the same NAT instance workers
-  # already use — private route table already routes 0.0.0.0/0 there.
   ami                         = var.ami_id
   instance_type               = var.master_instance_type
   subnet_id                   = var.private_subnet_ids[0]
@@ -355,7 +346,6 @@ resource "aws_instance" "master" {
   vpc_security_group_ids      = [aws_security_group.master.id]
   key_name                    = var.key_name
   iam_instance_profile        = aws_iam_instance_profile.master.name
-  user_data                   = var.k8s_bootstrap
 
   root_block_device {
     volume_size = 15
@@ -386,9 +376,6 @@ resource "aws_iam_role_policy" "master_argocd_registration_push" {
         "secretsmanager:TagResource",
         "secretsmanager:DescribeSecret"
       ]
-      # Scoped to exactly this cluster's own secret — same tag/name-scoping
-      # pattern already used for the CCM policy. A compromised spoke can't
-      # overwrite another spoke's registration.
       Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:argocd-clusters/${var.cluster_name}-*"
     }]
   })
@@ -420,9 +407,6 @@ resource "aws_iam_user_policy" "eso_reader" {
   })
 }
 
-# ESO's own IAM user credentials never touch tfstate outputs or a laptop —
-# stashed in Secrets Manager, the hub master pulls them at boot with a
-# permission scoped to this one secret only (below).
 resource "aws_secretsmanager_secret" "eso_bootstrap_creds" {
   count = var.install_eso ? 1 : 0
   name  = "${var.env}/eso/bootstrap-credentials"

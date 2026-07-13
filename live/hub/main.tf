@@ -82,18 +82,13 @@ module "tgw_attachment" {
   peer_cidr_blocks      = var.spoke_vpc_cidrs
 }
 
-# ── K8s bootstrap scripts (CNI + CCM + Argo CD) ───────────────────────────────
+# ── K8s bootstrap scripts (kubeadm init + CNI only — CCM/ArgoCD/ESO moved
+# to CI-driven bootstrap steps; see modules/k8s/variables.tf note) ───────────
 module "k8s" {
-  source               = "../../modules/k8s"
-  k8s_version          = var.k8s_version
-  pod_cidr             = var.pod_cidr
-  env                  = var.env
-  cluster_name         = var.cluster_name
-  cni_manifest_url     = var.cni_manifest_url
-  install_argocd       = true
-  argocd_chart_version = var.argocd_chart_version
-  install_eso          = true
-  gitops_repo_raw_url  = var.gitops_repo_raw_url
+  source      = "../../modules/k8s"
+  k8s_version = var.k8s_version
+  pod_cidr    = var.pod_cidr
+  env         = var.env
 }
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
@@ -107,7 +102,6 @@ module "ec2" {
   key_name             = var.key_name
   master_private_ip    = var.master_private_ip
   alb_sg_id            = module.alb.alb_sg_id
-  k8s_bootstrap        = module.k8s.master_userdata
   cluster_name         = var.cluster_name
   ami_id               = module.ami.ami_id
   install_eso          = true
@@ -140,7 +134,6 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   https_nodeport    = var.https_nodeport
-  worker_sg_id      = module.ec2.worker_sg_id
   asg_name          = module.asg.asg_name
   certificate_arn   = var.certificate_arn
   apps              = var.apps
