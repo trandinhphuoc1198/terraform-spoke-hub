@@ -348,7 +348,7 @@ resource "aws_instance" "master" {
   iam_instance_profile        = aws_iam_instance_profile.master.name
 
   root_block_device {
-    volume_size = 15
+    volume_size = 20
     volume_type = "gp3"
   }
 
