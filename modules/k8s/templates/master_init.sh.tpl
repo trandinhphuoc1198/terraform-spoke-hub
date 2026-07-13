@@ -81,22 +81,26 @@ echo "=== Installing CNI ===" >> /var/log/kubeadm-init.log
 helm repo add cilium https://helm.cilium.io/
 helm repo update
 
-helm upgrade --install cilium cilium/cilium \
-  --version  "1.16.0" \
-  --namespace kube-system \
-  --set kubeProxyReplacement=true \
-  --set k8sServiceHost="$PRIVATE_IP" \
-  --set k8sServicePort="6443" \
-  --set tunnel=disabled \
-  --set ipam.mode=kubernetes \
-  --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \
-  --set bpf.masquerade=true \
-  --set hubble.enabled=true \
-  --set hubble.relay.enabled=true \
-  --set hubble.ui.enabled=true \
-  --set hubble.metrics.enabled="{dns:query;ignoreAAAA,drop,tcp,flow,icmp,http}" \
-  --wait \
-  --timeout 5m
+for i in $(seq 1 5); do
+  helm upgrade --install cilium cilium/cilium \
+    --version  "1.16.0" \
+    --namespace kube-system \
+    --set kubeProxyReplacement=true \
+    --set k8sServiceHost="$PRIVATE_IP" \
+    --set k8sServicePort="6443" \
+    --set tunnel=disabled \
+    --set ipam.mode=kubernetes \
+    --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \
+    --set bpf.masquerade=true \
+    --set hubble.enabled=true \
+    --set hubble.relay.enabled=true \
+    --set hubble.ui.enabled=true \
+    --set hubble.metrics.enabled="{dns:query;ignoreAAAA,drop,tcp,flow,icmp,http}" \
+    --wait \
+    --timeout 5m && break
+  echo "Cilium install attempt $i failed, retrying in 10s..." >> /var/log/kubeadm-init.log
+  sleep 10
+done
 
 echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
 kubectl wait node --all --for=condition=Ready --timeout=300s
