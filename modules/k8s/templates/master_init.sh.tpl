@@ -4,6 +4,18 @@ exec > >(tee /var/log/k8s-bootstrap.log) 2>&1
 
 export PATH=$PATH:/usr/local/bin
 
+# ── Idempotency: clean any partial state from a previous failed attempt ───
+# kubeadm init isn't idempotent by default — if a prior run got far enough
+# to write static pod manifests / start etcd before failing (e.g. bad
+# --kubernetes-version, network blip), a retry will always fail preflight
+# with "already exists" / "port in use" instead of actually retrying.
+if [ -f /etc/kubernetes/manifests/kube-apiserver.yaml ] || [ -d /var/lib/etcd ] && [ "$(ls -A /var/lib/etcd 2>/dev/null)" ]; then
+  echo "=== Detected leftover state from a previous kubeadm init attempt — resetting ===" 
+  kubeadm reset -f || true
+  rm -rf /etc/kubernetes/manifests/* /var/lib/etcd/* /etc/kubernetes/pki
+  systemctl restart containerd
+fi
+
 # ── Retrieve Instance Metadata via IMDSv2 ───────────────────────────────────
 IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
 PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
