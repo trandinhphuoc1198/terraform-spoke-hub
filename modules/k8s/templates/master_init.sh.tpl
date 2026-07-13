@@ -73,7 +73,7 @@ helm upgrade --install cilium cilium/cilium \
   --set k8sServicePort="6443" \
   --set tunnel=disabled \
   --set ipam.mode=kubernetes \
-  --set ipam.operator.clusterPoolIPv4PodCIDRList="${var.pod_cidr}" \
+  --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \
   --set bpf.masquerade=true \
   --set hubble.enabled=true \
   --set hubble.relay.enabled=true \

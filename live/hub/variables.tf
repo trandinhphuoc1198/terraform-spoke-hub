@@ -110,12 +110,6 @@ variable "pod_cidr" {
   default     = "192.168.0.0/16"
 }
 
-variable "cni_manifest_url" {
-  description = "Manifest URL applied right after kubeadm init to bring up pod networking"
-  type        = string
-  default     = "https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml"
-}
-
 # ── ALB / Ingress ─────────────────────────────────────────────────────────────
 variable "https_nodeport" {
   description = "Kubernetes HTTPS NodePort the ALB target groups forward to (for NGINX Ingress)"

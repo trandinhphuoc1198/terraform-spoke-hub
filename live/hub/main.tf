@@ -89,7 +89,6 @@ module "k8s" {
   k8s_version      = var.k8s_version
   pod_cidr         = var.pod_cidr
   env              = var.env
-  cni_manifest_url = var.cni_manifest_url
 }
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
