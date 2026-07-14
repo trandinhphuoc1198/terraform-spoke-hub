@@ -75,53 +75,53 @@ jobs:
       - name: Render bootstrap script from terraform output
         run: terraform output -raw master_userdata > /tmp/bootstrap.sh
 
-      # - name: Run kubeadm init + CNI via SSM
-      #   id: bootstrap
-      #   run: |
-      #     B64=$(base64 -w0 /tmp/bootstrap.sh)
-      #     CMD_ID=$(aws ssm send-command \
-      #       --instance-ids "${{ steps.instance.outputs.id }}" \
-      #       --document-name "AWS-RunShellScript" \
-      #       --timeout-seconds 900 \
-      #       --parameters "commands=[\"echo $B64 | base64 -d > /tmp/bootstrap.sh\", \"chmod +x /tmp/bootstrap.sh\", \"/tmp/bootstrap.sh\"]" \
-      #       --query "Command.CommandId" --output text)
-      #     echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+      - name: Run kubeadm init + CNI via SSM
+        id: bootstrap
+        run: |
+          B64=$(base64 -w0 /tmp/bootstrap.sh)
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.instance.outputs.id }}" \
+            --document-name "AWS-RunShellScript" \
+            --timeout-seconds 900 \
+            --parameters "commands=[\"echo $B64 | base64 -d > /tmp/bootstrap.sh\", \"chmod +x /tmp/bootstrap.sh\", \"/tmp/bootstrap.sh\"]" \
+            --query "Command.CommandId" --output text)
+          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
 
-      #     for i in $(seq 1 90); do
-      #       STATUS=$(aws ssm get-command-invocation \
-      #         --command-id "$CMD_ID" \
-      #         --instance-id "${{ steps.instance.outputs.id }}" \
-      #         --query "Status" --output text 2>/dev/null || echo "Pending")
-      #       case "$STATUS" in
-      #         Success) echo "Command succeeded."; exit 0 ;;
-      #         Failed|Cancelled|TimedOut) echo "::error::Command ended with status $STATUS"; exit 1 ;;
-      #         *) echo "Status: $STATUS (attempt $i/90)"; sleep 10 ;;
-      #       esac
-      #     done
-      #     echo "::error::Timed out waiting for command completion"
-      #     exit 1
-      # - name: Show bootstrap output on failure
-      #   if: failure()
-      #   run: |
-      #     echo "=== STDOUT ==="
-      #     aws ssm get-command-invocation \
-      #       --command-id "${{ steps.bootstrap.outputs.cmd_id }}" \
-      #       --instance-id "${{ steps.instance.outputs.id }}" \
-      #       --query "StandardOutputContent" --output text
-      #     echo "=== STDERR ==="
-      #     aws ssm get-command-invocation \
-      #       --command-id "${{ steps.bootstrap.outputs.cmd_id }}" \
-      #       --instance-id "${{ steps.instance.outputs.id }}" \
-      #       --query "StandardErrorContent" --output text
+          for i in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$CMD_ID" \
+              --instance-id "${{ steps.instance.outputs.id }}" \
+              --query "Status" --output text 2>/dev/null || echo "Pending")
+            case "$STATUS" in
+              Success) echo "Command succeeded."; exit 0 ;;
+              Failed|Cancelled|TimedOut) echo "::error::Command ended with status $STATUS"; exit 1 ;;
+              *) echo "Status: $STATUS (attempt $i/90)"; sleep 10 ;;
+            esac
+          done
+          echo "::error::Timed out waiting for command completion"
+          exit 1
+      - name: Show bootstrap output on failure
+        if: failure()
+        run: |
+          echo "=== STDOUT ==="
+          aws ssm get-command-invocation \
+            --command-id "${{ steps.bootstrap.outputs.cmd_id }}" \
+            --instance-id "${{ steps.instance.outputs.id }}" \
+            --query "StandardOutputContent" --output text
+          echo "=== STDERR ==="
+          aws ssm get-command-invocation \
+            --command-id "${{ steps.bootstrap.outputs.cmd_id }}" \
+            --instance-id "${{ steps.instance.outputs.id }}" \
+            --query "StandardErrorContent" --output text
 
-      # - name: Verify master node is Ready
-      #   run: |
-      #     CMD_ID=$(aws ssm send-command \
-      #       --instance-ids "${{ steps.instance.outputs.id }}" \
-      #       --document-name "AWS-RunShellScript" \
-      #       --parameters 'commands=["KUBECONFIG=/home/ec2-user/.kube/config kubectl get nodes --no-headers"]' \
-      #       --query "Command.CommandId" --output text)
-      #     aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}"
-      #     aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}" \
-      #       --query StandardOutputContent --output text | tee node_status.txt
-      #     grep -q " Ready" node_status.txt || (echo "::error::master node did not reach Ready" && exit 1)
+      - name: Verify master node is Ready
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.instance.outputs.id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["KUBECONFIG=/home/ec2-user/.kube/config kubectl get nodes --no-headers"]' \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}" \
+            --query StandardOutputContent --output text | tee node_status.txt
+          grep -q " Ready" node_status.txt || (echo "::error::master node did not reach Ready" && exit 1)

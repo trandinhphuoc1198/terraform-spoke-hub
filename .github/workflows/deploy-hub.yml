@@ -85,14 +85,14 @@ jobs:
     secrets: inherit
 
   # ── 3. Argo CD install (hub only, one-time/idempotent) ──────────────────
-  # bootstrap-argocd:
-  #   name: "bootstrap argo cd (${{ inputs.environment }})"
-  #   needs: bootstrap-cluster-hub
-  #   uses: ./.github/workflows/k8s-bootstrap-argocd.yml
-  #   with:
-  #     environment: ${{ inputs.environment }}
-  #     aws_region: ${{ vars.AWS_REGION }}
-  #     env_name: hub-${{ inputs.environment }}
-  #     argocd_chart_version: ${{ vars.ARGOCD_CHART_VERSION }}
-  #     gitops_repo_raw_url: https://raw.githubusercontent.com/trandinhphuoc1198/k8s_ArgoCD/main
-  #   secrets: inherit
+  bootstrap-argocd:
+    name: "bootstrap argo cd (${{ inputs.environment }})"
+    needs: bootstrap-cluster-hub
+    uses: ./.github/workflows/k8s-bootstrap-argocd.yml
+    with:
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+      env_name: hub-${{ inputs.environment }}
+      argocd_chart_version: ${{ vars.ARGOCD_CHART_VERSION }}
+      gitops_repo_raw_url: https://raw.githubusercontent.com/trandinhphuoc1198/k8s_ArgoCD/main
+    secrets: inherit

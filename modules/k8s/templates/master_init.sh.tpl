@@ -16,9 +16,6 @@ cat <<EOF > /tmp/kubeadm-config.yaml
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 kubernetesVersion: "${k8s_version}"
-apiServer:
-  extraArgs:
-    cloud-provider: "external"
 controllerManager:
   extraArgs:
     cloud-provider: "external"
