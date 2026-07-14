@@ -13,6 +13,7 @@
 
   vars:
     k8s_version: "1.33" # overridden via `--extra-vars k8s_version=...` from Packer
+    crictl_version: "1.31.0"
 
   tasks:
     - name: Install amazon-ssm-agent
@@ -115,6 +116,39 @@
         name: containerd
         enabled: true
         state: started
+
+    - name: Download crictl release
+      ansible.builtin.get_url:
+        url: "https://github.com/kubernetes-sigs/cri-tools/releases/download/v{{ crictl_version }}/crictl-v{{ crictl_version }}-linux-amd64.tar.gz"
+        dest: /tmp/crictl.tar.gz
+        mode: "0644"
+
+    - name: Extract crictl binary
+      ansible.builtin.unarchive:
+        src: /tmp/crictl.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        creates: /usr/local/bin/crictl
+
+    - name: Make crictl executable
+      ansible.builtin.file:
+        path: /usr/local/bin/crictl
+        mode: "0755"
+
+    - name: Configure crictl to use containerd
+      ansible.builtin.copy:
+        dest: /etc/crictl.yaml
+        content: |
+          runtime-endpoint: unix:///run/containerd/containerd.sock
+          image-endpoint: unix:///run/containerd/containerd.sock
+          timeout: 2
+          debug: false
+        mode: "0644"
+
+    - name: Remove crictl archive from tmp
+      ansible.builtin.file:
+        path: /tmp/crictl.tar.gz
+        state: absent
 
     - name: Add Kubernetes yum repo
       ansible.builtin.yum_repository:
