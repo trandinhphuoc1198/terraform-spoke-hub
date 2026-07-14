@@ -9,7 +9,7 @@ on:
       k8s_version:
         description: "Kubernetes minor version to bake in (must match modules/k8s's k8s_version for envs that will consume this AMI)"
         required: false
-        default: "1.29"
+        default: "1.29.0"
       instance_type:
         description: "Instance type used only for the build (unrelated to master/worker instance types)"
         required: false
