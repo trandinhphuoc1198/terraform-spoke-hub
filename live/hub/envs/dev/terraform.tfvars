@@ -24,7 +24,7 @@ worker_desired     = 1
 worker_volume_size = 20
 master_volume_size = 20
 
-k8s_version = "1.29.0"
+k8s_version = "1.33"
 pod_cidr    = "192.168.0.0/16"
 
 https_nodeport  = 30443
