@@ -1,0 +1,58 @@
+name: destroy-all
+
+# FULL TEARDOWN of an environment. Chains spoke -> hub -> network — the
+# exact REVERSE of deploy-all.yml's bring-up order. This order matters:
+# both live/hub and live/spoke read global/network's state via
+# terraform_remote_state, so network has to be the last thing destroyed
+# or their `terraform destroy` runs will fail resolving that data source.
+#
+# For tearing down a single cluster only, use destroy-spoke.yml or
+# destroy-hub.yml directly instead — this workflow destroys everything
+# in the given environment, including the shared Transit Gateway that
+# any other spoke (e.g. live/spoke-2) also depends on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which envs/<environment> folder to destroy (backend.hcl + terraform.tfvars must exist for it in every root)"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      spoke_dir:
+        description: "Path to the spoke root to tear down"
+        required: false
+        type: string
+        default: "live/spoke"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  spoke:
+    name: "1. spoke"
+    uses: ./.github/workflows/destroy-spoke.yml
+    with:
+      environment: ${{ inputs.environment }}
+      spoke_dir: ${{ inputs.spoke_dir }}
+    secrets: inherit
+
+  hub:
+    name: "2. hub"
+    needs: spoke
+    uses: ./.github/workflows/destroy-hub.yml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  network:
+    name: "3. network"
+    needs: [spoke, hub]
+    uses: ./.github/workflows/destroy-network.yml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets: inherit

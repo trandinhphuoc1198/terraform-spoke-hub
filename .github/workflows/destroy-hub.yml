@@ -1,0 +1,74 @@
+name: destroy-hub
+
+# Tears down the hub cluster (live/hub) only. Does not touch live/spoke and
+# does not touch global/network.
+#
+# ⚠️ If any spoke is still registered against this hub's Argo CD, destroying
+# the hub first just means the spoke's registration goes stale (no automated
+# cleanup happens on the spoke side) — that's fine to do in either order
+# relative to destroy-spoke.yml, but destroy-network.yml must run AFTER
+# both this and destroy-spoke.yml (see that workflow's header comment).
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which envs/<environment> folder to destroy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.9.0"
+  AWS_REGION: "ap-northeast-1"
+
+jobs:
+  destroy-hub:
+    name: "destroy hub infra (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    # Gate via GitHub Environment protection rules (required reviewers) —
+    # configure this in repo Settings > Environments for dev/prod.
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: live/hub
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan -destroy
+        run: |
+          terraform plan -destroy \
+            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
+            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
+            -out=tfplan
+
+      - name: terraform apply (destroy)
+        run: terraform apply -auto-approve tfplan
