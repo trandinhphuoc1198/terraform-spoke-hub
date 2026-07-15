@@ -132,12 +132,20 @@ timeout 120 bash -c 'until ! kubectl get nodes -o json | grep -q "node.cloudprov
 echo "=== Waiting for node to become Ready ===" >> /var/log/kubeadm-init.log
 kubectl wait node --all --for=condition=Ready --timeout=180s
 
-# ── Generate Structured Join Manifest and Push to SSM ───────────────────
-# This is the only "hand-off" Terraform-owned bootstrap needs to make:
-# it publishes what a worker needs to join. Everything past "node is
-# Ready" (CCM, Argo CD, ESO, hub registration) is intentionally NOT here
-# anymore — see modules/k8s/README.md for where each of those now lives.
-echo "=== Pushing JSON Join Payload to SSM ===" >> /var/log/kubeadm-init.log
+# ── Join-token push script + rotation timer ──────────────────────────────
+# This is the only "hand-off" Terraform-owned bootstrap needs to make: it
+# publishes what a worker needs to join. Everything past "node is Ready"
+# (CCM, Argo CD, ESO, hub registration) is intentionally NOT here anymore —
+# see modules/k8s/README.md for where each of those now lives.
+
+echo "=== Installing join-token push script ===" >> /var/log/kubeadm-init.log
+cat <<'PUSHTOKEN' > /usr/local/bin/push-join-token.sh
+#!/bin/bash
+set -euo pipefail
+IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+
 TOKEN=$(kubeadm token create --ttl 24h)
 CA_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | sha256sum | awk '{print $1}')
 API_ENDPOINT="$PRIVATE_IP:6443"
@@ -154,3 +162,31 @@ aws ssm put-parameter \
   --type "SecureString" \
   --overwrite \
   --region "$AWS_REGION"
+PUSHTOKEN
+chmod +x /usr/local/bin/push-join-token.sh
+
+echo "=== Pushing initial JSON join payload to SSM ===" >> /var/log/kubeadm-init.log
+/usr/local/bin/push-join-token.sh
+
+echo "=== Installing join-token rotation timer (every 8h; token TTL is 24h) ===" >> /var/log/kubeadm-init.log
+cat <<TIMERUNIT > /etc/systemd/system/k8s-join-token-rotate.timer
+[Unit]
+Description=Refresh the kubeadm join token pushed to SSM (TTL is 24h; refresh well inside that window so a late Cluster Autoscaler scale-out never reads an expired token)
+[Timer]
+OnBootSec=8h
+OnUnitActiveSec=8h
+Persistent=true
+[Install]
+WantedBy=timers.target
+TIMERUNIT
+
+cat <<SERVICEUNIT > /etc/systemd/system/k8s-join-token-rotate.service
+[Unit]
+Description=Push a refreshed kubeadm join token to SSM
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/push-join-token.sh
+SERVICEUNIT
+
+systemctl daemon-reload
+systemctl enable --now k8s-join-token-rotate.timer
