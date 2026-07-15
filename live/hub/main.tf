@@ -138,6 +138,8 @@ module "alb" {
   asg_name          = module.asg.asg_name
   certificate_arn   = var.certificate_arn
   apps              = var.apps
+  worker_sg_id      = module.ec2.worker_sg_id
+
 }
 
 # ── IAM role assumed by the argocd-register-spoke.yml GitHub Actions workflow ─

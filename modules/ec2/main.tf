@@ -16,6 +16,16 @@ resource "aws_security_group" "master" {
   description = "K8s master node"
   vpc_id      = var.vpc_id
 
+  # Bare group — all rules are managed as separate aws_vpc_security_group_
+  # {ingress,egress}_rule resources below, deliberately kept out of this
+  # resource's own inline blocks. AWS Cloud Controller Manager also calls
+  # AuthorizeSecurityGroupIngress/RevokeSecurityGroupIngress directly against
+  # this same group at runtime (for LoadBalancer-type Services), outside
+  # Terraform's control. Without ignore_changes here, the next `apply` would
+  # see that externally-added rule as drift on this resource's computed
+  # ingress/egress attributes and try to revert it — even though the group
+  # was declared bare. This ignore_changes is what lets CCM and Terraform
+  # coexist on the same security group.
   lifecycle {
     ignore_changes = [ingress, egress]
   }
@@ -29,6 +39,7 @@ resource "aws_security_group" "worker" {
   description = "K8s worker nodes"
   vpc_id      = var.vpc_id
 
+  # See the comment on aws_security_group.master above — same rationale.
   lifecycle {
     ignore_changes = [ingress, egress]
   }
@@ -37,106 +48,109 @@ resource "aws_security_group" "worker" {
 }
 
 # ── Master rules ───────────────────────────────────────────────────────────────
-resource "aws_security_group_rule" "master_ingress_from_worker" {
-  description              = "All traffic from workers"
-  type                     = "ingress"
-  from_port                = 0
-  to_port                  = 0
-  protocol                 = "-1"
-  security_group_id        = aws_security_group.master.id
-  source_security_group_id = aws_security_group.worker.id
+resource "aws_vpc_security_group_ingress_rule" "master_ingress_from_worker" {
+  description                 = "All traffic from workers"
+  security_group_id           = aws_security_group.master.id
+  referenced_security_group_id = aws_security_group.worker.id
+  ip_protocol                 = "-1"
+
+  tags = { Name = "${var.env}-master-ingress-from-worker" }
 }
 
-resource "aws_security_group_rule" "master_ingress_self" {
-  description       = "All traffic from other masters (self)"
-  type              = "ingress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
-  security_group_id = aws_security_group.master.id
-  self              = true
+resource "aws_vpc_security_group_ingress_rule" "master_ingress_self" {
+  description                 = "All traffic from other masters (self)"
+  security_group_id           = aws_security_group.master.id
+  referenced_security_group_id = aws_security_group.master.id
+  ip_protocol                 = "-1"
+
+  tags = { Name = "${var.env}-master-ingress-self" }
 }
 
-resource "aws_security_group_rule" "master_ingress_ssh" {
-  description       = "SSH fallback access, VPC-only - SSM Session Manager is the primary access path"
-  type              = "ingress"
-  from_port         = 22
-  to_port           = 22
-  protocol          = "tcp"
-  security_group_id = aws_security_group.master.id
-  cidr_blocks       = [var.vpc_cidr]
+resource "aws_vpc_security_group_ingress_rule" "master_ingress_ssh" {
+  description        = "SSH fallback access, VPC-only - SSM Session Manager is the primary access path"
+  security_group_id  = aws_security_group.master.id
+  cidr_ipv4          = var.vpc_cidr
+  from_port          = 22
+  to_port             = 22
+  ip_protocol        = "tcp"
+
+  tags = { Name = "${var.env}-master-ingress-ssh" }
 }
 
-resource "aws_security_group_rule" "master_ingress_api_from_trusted_cidrs" {
-  count             = length(var.trusted_api_cidr_blocks) > 0 ? 1 : 0
-  description       = "kube-apiserver from trusted CIDRs (e.g. hub VPC via Transit Gateway)"
-  type              = "ingress"
-  from_port         = 6443
-  to_port           = 6443
-  protocol          = "tcp"
-  security_group_id = aws_security_group.master.id
-  cidr_blocks       = var.trusted_api_cidr_blocks
+# One rule per trusted CIDR (e.g. hub VPC via Transit Gateway) — the split
+# resource type only accepts a single cidr_ipv4 per rule, unlike the old
+# aws_security_group_rule's cidr_blocks list, so this is for_each'd instead
+# of the previous count-based single rule.
+resource "aws_vpc_security_group_ingress_rule" "master_ingress_api_from_trusted_cidrs" {
+  for_each = toset(var.trusted_api_cidr_blocks)
+
+  description        = "kube-apiserver from trusted CIDR (e.g. hub VPC via Transit Gateway)"
+  security_group_id  = aws_security_group.master.id
+  cidr_ipv4          = each.value
+  from_port          = 6443
+  to_port             = 6443
+  ip_protocol        = "tcp"
+
+  tags = { Name = "${var.env}-master-ingress-api-${replace(each.value, "/", "-")}" }
 }
 
-resource "aws_security_group_rule" "master_egress_all" {
-  description       = "All outbound"
-  type              = "egress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
-  security_group_id = aws_security_group.master.id
-  cidr_blocks       = ["0.0.0.0/0"]
+resource "aws_vpc_security_group_egress_rule" "master_egress_all" {
+  description        = "All outbound"
+  security_group_id  = aws_security_group.master.id
+  cidr_ipv4          = "0.0.0.0/0"
+  ip_protocol        = "-1"
+
+  tags = { Name = "${var.env}-master-egress-all" }
 }
 
 # ── Worker rules ───────────────────────────────────────────────────────────────
-resource "aws_security_group_rule" "worker_ingress_from_master" {
-  description              = "All traffic from master"
-  type                     = "ingress"
-  from_port                = 0
-  to_port                  = 0
-  protocol                 = "-1"
-  security_group_id        = aws_security_group.worker.id
-  source_security_group_id = aws_security_group.master.id
+resource "aws_vpc_security_group_ingress_rule" "worker_ingress_from_master" {
+  description                 = "All traffic from master"
+  security_group_id           = aws_security_group.worker.id
+  referenced_security_group_id = aws_security_group.master.id
+  ip_protocol                 = "-1"
+
+  tags = { Name = "${var.env}-worker-ingress-from-master" }
 }
 
-resource "aws_security_group_rule" "worker_ingress_self" {
-  description       = "All traffic between workers (self)"
-  type              = "ingress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
-  security_group_id = aws_security_group.worker.id
-  self              = true
+resource "aws_vpc_security_group_ingress_rule" "worker_ingress_self" {
+  description                 = "All traffic between workers (self)"
+  security_group_id           = aws_security_group.worker.id
+  referenced_security_group_id = aws_security_group.worker.id
+  ip_protocol                 = "-1"
+
+  tags = { Name = "${var.env}-worker-ingress-self" }
 }
 
-resource "aws_security_group_rule" "worker_ingress_nodeport" {
-  description              = "NodePort range from ALB"
-  type                     = "ingress"
-  from_port                = 30000
-  to_port                  = 32767
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.worker.id
-  source_security_group_id = var.alb_sg_id
+resource "aws_vpc_security_group_ingress_rule" "worker_ingress_nodeport" {
+  description                 = "NodePort range from ALB"
+  security_group_id           = aws_security_group.worker.id
+  referenced_security_group_id = var.alb_sg_id
+  from_port                   = 30000
+  to_port                      = 32767
+  ip_protocol                 = "tcp"
+
+  tags = { Name = "${var.env}-worker-ingress-nodeport" }
 }
 
-resource "aws_security_group_rule" "worker_ingress_ssh" {
-  description       = "SSH from VPC"
-  type              = "ingress"
-  from_port         = 22
-  to_port           = 22
-  protocol          = "tcp"
-  security_group_id = aws_security_group.worker.id
-  cidr_blocks       = [var.vpc_cidr]
+resource "aws_vpc_security_group_ingress_rule" "worker_ingress_ssh" {
+  description        = "SSH from VPC"
+  security_group_id  = aws_security_group.worker.id
+  cidr_ipv4          = var.vpc_cidr
+  from_port          = 22
+  to_port             = 22
+  ip_protocol        = "tcp"
+
+  tags = { Name = "${var.env}-worker-ingress-ssh" }
 }
 
-resource "aws_security_group_rule" "worker_egress_all" {
-  description       = "All outbound"
-  type              = "egress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
-  security_group_id = aws_security_group.worker.id
-  cidr_blocks       = ["0.0.0.0/0"]
+resource "aws_vpc_security_group_egress_rule" "worker_egress_all" {
+  description        = "All outbound"
+  security_group_id  = aws_security_group.worker.id
+  cidr_ipv4          = "0.0.0.0/0"
+  ip_protocol        = "-1"
+
+  tags = { Name = "${var.env}-worker-egress-all" }
 }
 
 # ── IAM role: master ───────────────────────────────────────────────────────────
@@ -251,6 +265,21 @@ resource "aws_iam_role" "worker" {
   tags = { Name = "${var.env}-k8s-worker-role", Env = var.env }
 }
 
+# NOTE: create/delete actions are scoped with aws:RequestTag /
+# aws:ResourceTag conditions against kubernetes.io/cluster/<cluster_name>,
+# the same tag the ASG (modules/asg) already applies to every worker
+# instance and propagates at launch. This mirrors the tag-scoping pattern
+# already used in master_ccm_policy above, instead of leaving these
+# mutating EBS actions on Resource = "*" with no condition.
+#
+# This only actually narrows access if whatever creates the volume/snapshot
+# (the in-tree AWS EBS provisioner or the aws-ebs-csi-driver) is configured
+# to tag what it creates with this same key/value — e.g. via the CSI
+# driver's --extra-tags flag or --k8s-tag-cluster-id. If that's not
+# configured, CreateVolume/CreateSnapshot calls tagged with something else
+# (or untagged) will simply fail closed rather than silently being broad,
+# which is the safer failure mode but worth verifying against your actual
+# storage driver config.
 resource "aws_iam_role_policy" "worker_ebs" {
   name = "${var.env}-k8s-worker-ebs-policy"
   role = aws_iam_role.worker.id
@@ -260,16 +289,58 @@ resource "aws_iam_role_policy" "worker_ebs" {
     Statement = concat(
       [
         {
-          Sid    = "EBSForPVC"
+          Sid    = "EBSReadOnlyDescribe"
           Effect = "Allow"
           Action = [
-            "ec2:AttachVolume", "ec2:CreateVolume", "ec2:DeleteVolume",
-            "ec2:DetachVolume", "ec2:DescribeVolumes", "ec2:DescribeVolumeStatus",
-            "ec2:DescribeInstances", "ec2:CreateSnapshot", "ec2:DeleteSnapshot",
-            "ec2:DescribeSnapshots", "ec2:CreateTags", "ec2:ModifyVolume",
+            "ec2:DescribeVolumes", "ec2:DescribeVolumeStatus",
+            "ec2:DescribeInstances", "ec2:DescribeSnapshots",
             "ec2:DescribeAvailabilityZones"
           ]
           Resource = "*"
+        },
+        {
+          Sid    = "EBSCreateTaggedForThisCluster"
+          Effect = "Allow"
+          Action = ["ec2:CreateVolume", "ec2:CreateSnapshot"]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "aws:RequestTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+            }
+          }
+        },
+        {
+          Sid    = "EBSMutateOnlyResourcesTaggedForThisCluster"
+          Effect = "Allow"
+          Action = [
+            "ec2:AttachVolume",
+            "ec2:DetachVolume",
+            "ec2:DeleteVolume",
+            "ec2:DeleteSnapshot",
+            "ec2:ModifyVolume"
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+            }
+          }
+        },
+        {
+          # CreateTags itself has to stay separate: it's the call that
+          # applies the very tag the two conditions above check for, so it
+          # can't be gated on aws:ResourceTag (the tag doesn't exist yet).
+          # Scoped instead to only fire as a side effect of the two create
+          # actions this policy already allows.
+          Sid      = "EBSCreateTagsOnNewVolumesAndSnapshots"
+          Effect   = "Allow"
+          Action   = ["ec2:CreateTags"]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "ec2:CreateAction" = ["CreateVolume", "CreateSnapshot"]
+            }
+          }
         },
         {
           Sid      = "SSMReadToken"
@@ -299,21 +370,35 @@ resource "aws_iam_role_policy" "master_autoscaler" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid    = "ClusterAutoscaler"
-      Effect = "Allow"
-      Action = [
-        "autoscaling:DescribeAutoScalingGroups",
-        "autoscaling:DescribeAutoScalingInstances",
-        "autoscaling:DescribeLaunchConfigurations",
-        "autoscaling:DescribeScalingActivities",
-        "autoscaling:SetDesiredCapacity",
-        "autoscaling:TerminateInstanceInAutoScalingGroup",
-        "ec2:DescribeLaunchTemplateVersions",
-        "ec2:DescribeInstanceTypes"
-      ]
-      Resource = "*"
-    }]
+    Statement = [
+      {
+        Sid    = "ClusterAutoscalerReadOnlyDescribe"
+        Effect = "Allow"
+        Action = [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeScalingActivities",
+          "ec2:DescribeLaunchTemplateVersions",
+          "ec2:DescribeInstanceTypes"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ClusterAutoscalerMutateOnlyThisClusterASG"
+        Effect = "Allow"
+        Action = [
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "autoscaling:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+          }
+        }
+      }
+    ]
   })
 }
 

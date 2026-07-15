@@ -13,7 +13,7 @@ output "master_sg_id" {
 }
 
 output "worker_sg_id" {
-  description = "Security group ID shared by all worker nodes (static + ASG)"
+  description = "Security group ID shared by all worker nodes launched by the ASG (modules/asg) — attached to every worker instance via the launch template"
   value       = aws_security_group.worker.id
 }
 

@@ -10,6 +10,11 @@ variable "https_nodeport" {
   default     = 30443
 }
 
+variable "worker_sg_id" {
+  description = "Worker node security group ID (from the ec2 module) — the ALB's egress is scoped to this SG on https_nodeport only, instead of 0.0.0.0/0"
+  type        = string
+}
+
 variable "apps" {
   description = "Map of apps to deploy — each gets its own target group and ALB listener rule"
   type = map(object({
@@ -18,4 +23,3 @@ variable "apps" {
     priority    = number
   }))
 }
-

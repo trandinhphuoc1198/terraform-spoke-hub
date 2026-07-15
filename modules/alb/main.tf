@@ -20,10 +20,11 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "HTTPS NodePort on worker nodes only"
+    from_port       = var.https_nodeport
+    to_port         = var.https_nodeport
+    protocol        = "tcp"
+    security_groups = [var.worker_sg_id]
   }
 
   tags = { Name = "${var.env}-alb-sg" }
