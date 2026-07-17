@@ -22,6 +22,10 @@ on:
         description: "Must match live/spoke's var.cluster_name"
         type: string
         required: true
+      cluster_role:
+        description: "Value stamped into the pushed secret's 'role' field and, downstream, the ExternalSecret's cluster-role label — must match the ApplicationSets' cluster generator selector (argocd/spokes/**)"
+        type: string
+        default: "workload"
       env_name:
         description: "Full env value, e.g. spoke-dev — must match live/spoke's var.env"
         type: string
@@ -63,6 +67,7 @@ jobs:
         run: |
           sed \
             -e "s|__CLUSTER_NAME__|${{ inputs.cluster_name }}|g" \
+            -e "s|__CLUSTER_ROLE__|${{ inputs.cluster_role }}|g" \
             -e "s|__ENV__|${{ inputs.env_name }}|g" \
             ../../.github/scripts/register-with-hub.sh.tpl > /tmp/register-with-hub.sh
 

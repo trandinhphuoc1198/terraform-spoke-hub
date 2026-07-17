@@ -121,6 +121,7 @@ jobs:
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
       cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}
+      cluster_role: ${{ inputs.cluster_role }}
       env_name: spoke-${{ inputs.environment }}
     secrets: inherit
 

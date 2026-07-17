@@ -49,30 +49,30 @@ resource "aws_security_group" "worker" {
 
 # ── Master rules ───────────────────────────────────────────────────────────────
 resource "aws_vpc_security_group_ingress_rule" "master_ingress_from_worker" {
-  description                 = "All traffic from workers"
-  security_group_id           = aws_security_group.master.id
+  description                  = "All traffic from workers"
+  security_group_id            = aws_security_group.master.id
   referenced_security_group_id = aws_security_group.worker.id
-  ip_protocol                 = "-1"
+  ip_protocol                  = "-1"
 
   tags = { Name = "${var.env}-master-ingress-from-worker" }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "master_ingress_self" {
-  description                 = "All traffic from other masters (self)"
-  security_group_id           = aws_security_group.master.id
+  description                  = "All traffic from other masters (self)"
+  security_group_id            = aws_security_group.master.id
   referenced_security_group_id = aws_security_group.master.id
-  ip_protocol                 = "-1"
+  ip_protocol                  = "-1"
 
   tags = { Name = "${var.env}-master-ingress-self" }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "master_ingress_ssh" {
-  description        = "SSH fallback access, VPC-only - SSM Session Manager is the primary access path"
-  security_group_id  = aws_security_group.master.id
-  cidr_ipv4          = var.vpc_cidr
-  from_port          = 22
-  to_port             = 22
-  ip_protocol        = "tcp"
+  description       = "SSH fallback access, VPC-only - SSM Session Manager is the primary access path"
+  security_group_id = aws_security_group.master.id
+  cidr_ipv4         = var.vpc_cidr
+  from_port         = 22
+  to_port           = 22
+  ip_protocol       = "tcp"
 
   tags = { Name = "${var.env}-master-ingress-ssh" }
 }
@@ -84,71 +84,71 @@ resource "aws_vpc_security_group_ingress_rule" "master_ingress_ssh" {
 resource "aws_vpc_security_group_ingress_rule" "master_ingress_api_from_trusted_cidrs" {
   for_each = toset(var.trusted_api_cidr_blocks)
 
-  description        = "kube-apiserver from trusted CIDR (e.g. hub VPC via Transit Gateway)"
-  security_group_id  = aws_security_group.master.id
-  cidr_ipv4          = each.value
-  from_port          = 6443
-  to_port             = 6443
-  ip_protocol        = "tcp"
+  description       = "kube-apiserver from trusted CIDR (e.g. hub VPC via Transit Gateway)"
+  security_group_id = aws_security_group.master.id
+  cidr_ipv4         = each.value
+  from_port         = 6443
+  to_port           = 6443
+  ip_protocol       = "tcp"
 
   tags = { Name = "${var.env}-master-ingress-api-${replace(each.value, "/", "-")}" }
 }
 
 resource "aws_vpc_security_group_egress_rule" "master_egress_all" {
-  description        = "All outbound"
-  security_group_id  = aws_security_group.master.id
-  cidr_ipv4          = "0.0.0.0/0"
-  ip_protocol        = "-1"
+  description       = "All outbound"
+  security_group_id = aws_security_group.master.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
 
   tags = { Name = "${var.env}-master-egress-all" }
 }
 
 # ── Worker rules ───────────────────────────────────────────────────────────────
 resource "aws_vpc_security_group_ingress_rule" "worker_ingress_from_master" {
-  description                 = "All traffic from master"
-  security_group_id           = aws_security_group.worker.id
+  description                  = "All traffic from master"
+  security_group_id            = aws_security_group.worker.id
   referenced_security_group_id = aws_security_group.master.id
-  ip_protocol                 = "-1"
+  ip_protocol                  = "-1"
 
   tags = { Name = "${var.env}-worker-ingress-from-master" }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "worker_ingress_self" {
-  description                 = "All traffic between workers (self)"
-  security_group_id           = aws_security_group.worker.id
+  description                  = "All traffic between workers (self)"
+  security_group_id            = aws_security_group.worker.id
   referenced_security_group_id = aws_security_group.worker.id
-  ip_protocol                 = "-1"
+  ip_protocol                  = "-1"
 
   tags = { Name = "${var.env}-worker-ingress-self" }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "worker_ingress_nodeport" {
-  description                 = "NodePort range from ALB"
-  security_group_id           = aws_security_group.worker.id
+  description                  = "NodePort range from ALB"
+  security_group_id            = aws_security_group.worker.id
   referenced_security_group_id = var.alb_sg_id
-  from_port                   = 30000
+  from_port                    = 30000
   to_port                      = 32767
-  ip_protocol                 = "tcp"
+  ip_protocol                  = "tcp"
 
   tags = { Name = "${var.env}-worker-ingress-nodeport" }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "worker_ingress_ssh" {
-  description        = "SSH from VPC"
-  security_group_id  = aws_security_group.worker.id
-  cidr_ipv4          = var.vpc_cidr
-  from_port          = 22
-  to_port             = 22
-  ip_protocol        = "tcp"
+  description       = "SSH from VPC"
+  security_group_id = aws_security_group.worker.id
+  cidr_ipv4         = var.vpc_cidr
+  from_port         = 22
+  to_port           = 22
+  ip_protocol       = "tcp"
 
   tags = { Name = "${var.env}-worker-ingress-ssh" }
 }
 
 resource "aws_vpc_security_group_egress_rule" "worker_egress_all" {
-  description        = "All outbound"
-  security_group_id  = aws_security_group.worker.id
-  cidr_ipv4          = "0.0.0.0/0"
-  ip_protocol        = "-1"
+  description       = "All outbound"
+  security_group_id = aws_security_group.worker.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
 
   tags = { Name = "${var.env}-worker-egress-all" }
 }
@@ -299,9 +299,9 @@ resource "aws_iam_role_policy" "worker_ebs" {
           Resource = "*"
         },
         {
-          Sid    = "EBSCreateTaggedForThisCluster"
-          Effect = "Allow"
-          Action = ["ec2:CreateVolume", "ec2:CreateSnapshot"]
+          Sid      = "EBSCreateTaggedForThisCluster"
+          Effect   = "Allow"
+          Action   = ["ec2:CreateVolume", "ec2:CreateSnapshot"]
           Resource = "*"
           Condition = {
             StringEquals = {

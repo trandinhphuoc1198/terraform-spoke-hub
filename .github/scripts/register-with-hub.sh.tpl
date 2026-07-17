@@ -4,6 +4,7 @@ export KUBECONFIG=/home/ec2-user/.kube/config
 export PATH=$PATH:/usr/local/bin
 
 CLUSTER_NAME="__CLUSTER_NAME__"
+CLUSTER_ROLE="__CLUSTER_ROLE__"
 ENV="__ENV__"
 
 echo "=== Creating argocd-manager service account ==="
@@ -32,10 +33,11 @@ SERVER_URL="https://\$MASTER_IP:6443"
 
 PAYLOAD=\$(jq -n \\
   --arg name "${CLUSTER_NAME}" \\
+  --arg role "${CLUSTER_ROLE}" \\
   --arg server "\$SERVER_URL" \\
   --arg token "\$TOKEN" \\
   --arg ca "\$CA_DATA" \\
-  '{name:\$name, server:\$server, token:\$token, caData:\$ca}')
+  '{name:\$name, role:\$role, server:\$server, token:\$token, caData:\$ca}')
 
 aws secretsmanager put-secret-value \\
   --secret-id "\$SECRET_NAME" \\
@@ -44,7 +46,7 @@ aws secretsmanager put-secret-value \\
 aws secretsmanager create-secret \\
   --name "\$SECRET_NAME" \\
   --secret-string "\$PAYLOAD" \\
-  --tags Key=ManagedBy,Value=k8s-bootstrap Key=ClusterName,Value=${CLUSTER_NAME} Key=Purpose,Value=argocd-registration \\
+  --tags Key=ManagedBy,Value=k8s-bootstrap Key=ClusterName,Value=${CLUSTER_NAME} Key=ClusterRole,Value=${CLUSTER_ROLE} Key=Purpose,Value=argocd-registration \\
   --region "\$AWS_REGION"
 ROTATE
 chmod +x /usr/local/bin/push-argocd-registration.sh
