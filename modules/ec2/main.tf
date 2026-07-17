@@ -305,7 +305,7 @@ resource "aws_iam_role_policy" "worker_ebs" {
           Resource = "*"
           Condition = {
             StringEquals = {
-              "aws:RequestTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+              "aws:RequestTag/ebs.csi.aws.com/cluster" = "true"
             }
           }
         },
@@ -322,7 +322,7 @@ resource "aws_iam_role_policy" "worker_ebs" {
           Resource = "*"
           Condition = {
             StringEquals = {
-              "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+              "aws:ResourceTag/ebs.csi.aws.com/cluster" = "true"
             }
           }
         },
