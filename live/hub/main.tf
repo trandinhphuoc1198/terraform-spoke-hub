@@ -175,7 +175,7 @@ resource "aws_iam_role_policy" "argocd_registration_ci" {
         Sid      = "FindHubMaster"
         Effect   = "Allow"
         Action   = ["ec2:DescribeInstances"]
-        Resource = "*" # DescribeInstances has no resource-level scoping (AWS limitation)
+        Resource = "*"
       },
       {
         Sid    = "RunOnHubMasterOnly"
@@ -191,11 +191,19 @@ resource "aws_iam_role_policy" "argocd_registration_ci" {
         Effect   = "Allow"
         Action   = ["ssm:GetCommandInvocation", "ssm:ListCommands", "ssm:ListCommandInvocations"]
         Resource = "*"
+      },
+      {
+        Sid    = "ReadSpokeRegistrationSecrets"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:argocd-clusters/*"
       }
     ]
   })
 }
-
 output "argocd_registration_ci_role_arn" {
   value = aws_iam_role.argocd_registration_ci.arn
 }
