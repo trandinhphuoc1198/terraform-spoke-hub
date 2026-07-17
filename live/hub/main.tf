@@ -147,6 +147,8 @@ data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_iam_role" "argocd_registration_ci" {
   name = "${var.env}-argocd-registration-ci"
 
