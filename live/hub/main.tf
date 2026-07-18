@@ -142,7 +142,7 @@ module "alb" {
 
 }
 
-# ── IAM role assumed by the argocd-register-spoke.yml GitHub Actions workflow ─
+# ── IAM role assumed by the verify-spoke-registration.yml GitHub Actions workflow ─
 data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }

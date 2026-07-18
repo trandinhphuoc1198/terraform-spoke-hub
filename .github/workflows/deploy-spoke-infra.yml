@@ -1,18 +1,20 @@
-name: deploy-spoke
+name: deploy-spoke-infra
 
-# Deploys/updates ONE spoke cluster: terraform apply, kubeadm bootstrap,
-# push registration token to Secrets Manager, then register the cluster
-# Secret in the hub's Argo CD. Does not touch live/hub and does not
-# re-apply global/network.
+# Spoke infra ONLY: terraform apply, kubeadm bootstrap, and pushing the
+# argocd-manager registration token to Secrets Manager. Deliberately stops
+# there — it does NOT verify the hub's Argo CD picked up the registration,
+# because that verification (verify-spoke-registration.yml) requires the hub's
+# master instance to exist and its Argo CD/ESO to be running, which this
+# workflow has no dependency on and shouldn't wait for.
 #
-# Requires the hub's Argo CD to already be installed (deploy-hub.yml) —
-# that's a real dependency (this cluster is registering *into* the hub's
-# Argo CD), not just a CI artifact. For a brand-new environment, run
-# deploy-all.yml instead, or run deploy-hub.yml once first.
+# This split exists so deploy-all.yml can run this in parallel with
+# deploy-hub.yml (spoke's terraform state has no dependency on hub's —
+# hub_vpc_cidr is a plain tfvar, not a remote-state read), then gate the
+# final verify-spoke-registration.yml verification on both finishing.
 #
-# `spoke_dir` lets this same workflow drive additional spokes later
-# (e.g. live/spoke-2) without copy-pasting new workflow jobs — see the
-# README's "Adding a second spoke later" section.
+# For a single day-2 spoke change where you just want the full chain
+# (infra -> bootstrap -> register -> verify) in one run, use deploy-spoke.yml
+# instead — it calls this same infra chain plus the verify step, sequentially.
 
 on:
   workflow_dispatch:
@@ -46,6 +48,10 @@ on:
       cluster_role:
         type: string
         default: "workload"
+    outputs:
+      cluster_name:
+        description: "cluster_name output of the spoke's terraform root — needed by verify-spoke-registration.yml"
+        value: ${{ jobs.deploy-spoke.outputs.cluster_name }}
     secrets:
       AWS_DEPLOY_ROLE_ARN:
         required: true
@@ -112,6 +118,8 @@ jobs:
     secrets: inherit
 
   # ── 3. push argocd-manager token to Secrets Manager + rotation timer ────
+  # Only touches Secrets Manager — no dependency on the hub cluster itself,
+  # so this is safe to run before or during the hub's own bring-up.
   register-with-hub-spoke:
     name: "register spoke with hub (secrets manager) — ${{ inputs.environment }}"
     needs: [bootstrap-cluster-spoke, deploy-spoke]
@@ -123,16 +131,4 @@ jobs:
       cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}
       cluster_role: ${{ inputs.cluster_role }}
       env_name: spoke-${{ inputs.environment }}
-    secrets: inherit
-
-  # ── 4. verify ArgoCD registered the spoke ─────────────────────────────────
-  register-spoke:
-    name: "verify spoke registered with hub argocd (${{ inputs.environment }})"
-    needs: [deploy-spoke, register-with-hub-spoke]
-    uses: ./.github/workflows/verify-spoke-registration.yml
-    with:
-      spoke_cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}
-      hub_env: hub-${{ inputs.environment }}
-      cluster_role: ${{ inputs.cluster_role }}
-      cluster_env: ${{ inputs.environment }}
     secrets: inherit

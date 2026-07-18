@@ -1,4 +1,4 @@
-name: argocd-register-spoke
+name: verify-spoke-registration
 
 # Terraform/CI's job stops at pushing {name, role, server, token, caData} to
 # Secrets Manager (see k8s-register-with-hub.yml / register-with-hub.sh.tpl)

@@ -2,7 +2,7 @@ name: k8s-register-with-hub
 
 # Spoke only. Creates the argocd-manager SA on the spoke, pushes the
 # initial registration token to Secrets Manager, and installs a host-level
-# rotation timer. Must run before argocd-register-spoke.yml, which reads
+# rotation timer. Must run before verify-spoke-registration.yml, which reads
 # the secret this job creates. Called by deploy-spoke.yml.
 
 on:

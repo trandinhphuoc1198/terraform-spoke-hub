@@ -168,7 +168,7 @@ tracing end to end:
 4. Argo CD sees the labeled Secret and treats the spoke as a registered
    cluster — no `argocd cluster add` step, no CI step that mutates the
    hub on every spoke deploy.
-5. **CI (`argocd-register-spoke.yml`)** polls the hub (again via SSM) for
+5. **CI (`verify-spoke-registration.yml`)** polls the hub (again via SSM) for
    that Secret to confirm the pipeline actually completed, and fails
    loudly with a checklist of likely causes if it times out instead of
    assuming ESO will "get there eventually."
