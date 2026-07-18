@@ -304,42 +304,53 @@ resource "aws_iam_role_policy" "worker_ebs" {
           Action   = ["ec2:CreateVolume", "ec2:CreateSnapshot"]
           Resource = "*"
           Condition = {
+            StringEquals = { "aws:RequestTag/ebs.csi.aws.com/cluster" = "true" }
+          }
+        },
+        # NEW — Attach/Detach need permission on the INSTANCE side too,
+        # and instances aren't tagged with ebs.csi.aws.com/cluster, so this
+        # can't carry that condition. Scope it to this cluster's own
+        # instances via the tag the ASG *does* apply instead.
+        {
+          Sid      = "EBSAttachDetachOnThisClustersInstances"
+          Effect   = "Allow"
+          Action   = ["ec2:AttachVolume", "ec2:DetachVolume"]
+          Resource = "arn:aws:ec2:*:*:instance/*"
+          Condition = {
             StringEquals = {
-              "aws:RequestTag/ebs.csi.aws.com/cluster" = "true"
+              "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
             }
           }
         },
         {
-          Sid    = "EBSMutateOnlyResourcesTaggedForThisCluster"
+          Sid      = "EBSAttachDetachOnTaggedVolumes"
+          Effect   = "Allow"
+          Action   = ["ec2:AttachVolume", "ec2:DetachVolume"]
+          Resource = "arn:aws:ec2:*:*:volume/*"
+          Condition = {
+            StringEquals = { "aws:ResourceTag/ebs.csi.aws.com/cluster" = "true" }
+          }
+        },
+        {
+          Sid    = "EBSMutateVolumeOnlyResourcesTaggedForThisCluster"
           Effect = "Allow"
           Action = [
-            "ec2:AttachVolume",
-            "ec2:DetachVolume",
             "ec2:DeleteVolume",
             "ec2:DeleteSnapshot",
             "ec2:ModifyVolume"
           ]
-          Resource = "*"
+          Resource = "arn:aws:ec2:*:*:volume/*"
           Condition = {
-            StringEquals = {
-              "aws:ResourceTag/ebs.csi.aws.com/cluster" = "true"
-            }
+            StringEquals = { "aws:ResourceTag/ebs.csi.aws.com/cluster" = "true" }
           }
         },
         {
-          # CreateTags itself has to stay separate: it's the call that
-          # applies the very tag the two conditions above check for, so it
-          # can't be gated on aws:ResourceTag (the tag doesn't exist yet).
-          # Scoped instead to only fire as a side effect of the two create
-          # actions this policy already allows.
           Sid      = "EBSCreateTagsOnNewVolumesAndSnapshots"
           Effect   = "Allow"
           Action   = ["ec2:CreateTags"]
           Resource = "*"
           Condition = {
-            StringEquals = {
-              "ec2:CreateAction" = ["CreateVolume", "CreateSnapshot"]
-            }
+            StringEquals = { "ec2:CreateAction" = ["CreateVolume", "CreateSnapshot"] }
           }
         },
         {
