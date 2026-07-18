@@ -30,6 +30,12 @@ on:
         required: false
         type: string
         default: "live/spoke"
+      
+      cluster_role:
+        description: "Label value for cluster-role, e.g. workload"
+        required: true
+        type: string
+        default: "workload"
 
 permissions:
   id-token: write
@@ -58,4 +64,5 @@ jobs:
     with:
       environment: ${{ inputs.environment }}
       spoke_dir: ${{ inputs.spoke_dir }}
+      cluster_role: ${{ inputs.cluster_role }}
     secrets: inherit
