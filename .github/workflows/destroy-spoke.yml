@@ -4,14 +4,17 @@ name: destroy-spoke
 # live/hub and does not touch global/network.
 #
 # Before terraform destroy runs, this workflow drains every PersistentVolumeClaim
-# on the cluster over SSM. The `ebs-csi` StorageClass (platform/values/spoke/ebs-csi.yaml)
-# is set to reclaimPolicy: Delete, so deleting a PVC cascades to its PV, which
-# makes the aws-ebs-csi-driver issue a DeleteVolume call for the backing EBS
-# volume — the same volume Terraform never created and therefore would
-# otherwise orphan (postgresql, kube-prometheus-stack, Loki, Tempo ingesters
-# all provision storage this way). This MUST run while the nodes/CSI driver
-# are still alive, i.e. before terraform destroy — draining after the cluster
-# is gone has nothing left to issue the DeleteVolume calls.
+# on the cluster over SSM (.github/scripts/drain-pvcs.sh.tpl). The `ebs-csi`
+# StorageClass (platform/values/spoke/ebs-csi.yaml) is set to reclaimPolicy:
+# Delete, so a fully-released PVC cascades to its PV, which makes the
+# aws-ebs-csi-driver issue a DeleteVolume call for the backing EBS volume —
+# the same volume Terraform never created and therefore would otherwise
+# orphan (postgresql, kube-prometheus-stack, Loki, Tempo ingesters all
+# provision storage this way). This MUST run while the nodes/CSI driver are
+# still alive, i.e. before terraform destroy — draining after the cluster is
+# gone has nothing left to issue the DeleteVolume calls. See that script for
+# why it deletes whole namespaces rather than just the PVCs, and the ArgoCD
+# self-heal caveat.
 #
 # If the master is unreachable over SSM (e.g. cluster already partially
 # torn down, broken bootstrap), the drain step logs a warning and continues
@@ -103,6 +106,8 @@ jobs:
       # regardless.
       - name: Drain PVCs (release CSI-backed EBS volumes before teardown)
         if: steps.instance.outputs.id != ''
+        id: drain
+        continue-on-error: true
         run: |
           INSTANCE_ID="${{ steps.instance.outputs.id }}"
 
@@ -119,33 +124,38 @@ jobs:
             exit 0
           fi
 
-          echo "Deleting all PVCs across all namespaces (reclaimPolicy: Delete on the \
-          ebs-csi StorageClass will cascade PV -> EBS volume deletion)..."
+          B64=$(base64 -w0 ../../.github/scripts/drain-pvcs.sh.tpl)
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --timeout-seconds 300 \
-            --parameters 'commands=["KUBECONFIG=/home/ec2-user/.kube/config kubectl delete pvc --all --all-namespaces --timeout=120s --ignore-not-found=true || true"]' \
+            --timeout-seconds 600 \
+            --parameters "commands=[\"echo $B64 | base64 -d > /tmp/drain-pvcs.sh\", \"chmod +x /tmp/drain-pvcs.sh\", \"/tmp/drain-pvcs.sh\"]" \
             --query "Command.CommandId" --output text)
+          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
 
-          for i in $(seq 1 30); do
+          for i in $(seq 1 55); do
             ST=$(aws ssm get-command-invocation \
               --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
               --query "Status" --output text 2>/dev/null || echo "Pending")
             case "$ST" in
-              Success) echo "PVC delete command completed."; break ;;
+              Success) echo "PVC drain completed."; exit 0 ;;
               Failed|Cancelled|TimedOut)
-                echo "::warning::PVC delete command ended with status $ST — some volumes \
-                may not have been released cleanly. Check the AWS Console for leftover \
-                volumes tagged ebs.csi.aws.com/cluster=true after this run."
-                break ;;
+                echo "::warning::PVC drain command ended with status $ST — some volumes may \
+                not have been released cleanly. Check the AWS Console for leftover volumes \
+                tagged ebs.csi.aws.com/cluster=true after this run."
+                exit 0 ;;
               *) sleep 10 ;;
             esac
           done
+          echo "::warning::Timed out waiting for the PVC drain command to report a final status."
 
-          echo "Waiting 30s for the EBS CSI driver to finish issuing DeleteVolume calls..."
-          sleep 30
-        continue-on-error: true
+      - name: Show PVC drain output
+        if: steps.drain.outputs.cmd_id != ''
+        run: |
+          aws ssm get-command-invocation \
+            --command-id "${{ steps.drain.outputs.cmd_id }}" \
+            --instance-id "${{ steps.instance.outputs.id }}" \
+            --query "StandardOutputContent" --output text || true
 
       - name: terraform plan -destroy
         run: |
