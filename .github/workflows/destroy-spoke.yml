@@ -3,31 +3,25 @@ name: destroy-spoke
 # Tears down ONE spoke cluster's infra (default live/spoke). Does not touch
 # live/hub and does not touch global/network.
 #
-# Before terraform destroy runs, this workflow drains every PersistentVolumeClaim
-# on the cluster over SSM (.github/scripts/drain-pvcs.sh.tpl). The `ebs-csi`
-# StorageClass (platform/values/spoke/ebs-csi.yaml) is set to reclaimPolicy:
-# Delete, so a fully-released PVC cascades to its PV, which makes the
-# aws-ebs-csi-driver issue a DeleteVolume call for the backing EBS volume —
-# the same volume Terraform never created and therefore would otherwise
-# orphan (postgresql, kube-prometheus-stack, Loki, Tempo ingesters all
-# provision storage this way). This MUST run while the nodes/CSI driver are
-# still alive, i.e. before terraform destroy — draining after the cluster is
-# gone has nothing left to issue the DeleteVolume calls. See that script for
-# why it deletes whole namespaces rather than just the PVCs, and the ArgoCD
-# self-heal caveat.
+# Three phases, in order:
+#   1. deregister-from-argocd — fully removes the spoke from ArgoCD's
+#      inventory (see .github/workflows/k8s-deregister-from-hub.yml) so
+#      nothing can recreate a workload while the next phase runs. Fails the
+#      whole job if it can't be confirmed — this is the piece that makes
+#      the rest of this pipeline race-free rather than best-effort.
+#   2. drain-spoke — drains every remaining PersistentVolumeClaim
+#      (.github/scripts/drain-pvcs.sh.tpl) so the aws-ebs-csi-driver issues
+#      DeleteVolume for every EBS volume Terraform never created (postgresql,
+#      kube-prometheus-stack, Loki, Tempo). Runs risk-free now that ArgoCD
+#      can no longer resurrect anything. This step is best-effort — a stuck
+#      PVC logs a warning rather than blocking teardown, since the whole
+#      point of this workflow is to tear the cluster down regardless.
+#   3. terraform destroy — removes the Terraform-managed infra itself.
 #
-# If the master is unreachable over SSM (e.g. cluster already partially
-# torn down, broken bootstrap), the drain step logs a warning and continues
-# rather than blocking teardown — in that case check the AWS Console for
-# leftover volumes tagged ebs.csi.aws.com/cluster=true after this run.
-#
-# NOTE: this only destroys the Terraform-managed infra. It does NOT remove
-# the spoke's registration from the hub's Argo CD (that lives as a file in
-# the separate gitops repo — argocd/clusters/<name>.yaml — and as a Secret
-# materialized by ESO from Secrets Manager). If you're retiring this spoke
-# permanently, also delete argocd/clusters/<name>.yaml from the gitops repo
-# and the argocd-clusters/<cluster_name> secret in Secrets Manager, or the
-# hub's Argo CD will keep showing a dead/unreachable cluster.
+# NOTE: this only destroys the Terraform-managed infra and the ArgoCD
+# registration (phase 1). It does NOT remove the argocd-clusters/<name>
+# secret in AWS Secrets Manager — that's inert once the ArgoCD-side Secret
+# and git file are gone, but delete it too if you want to fully clean up.
 #
 # `spoke_dir` mirrors deploy-spoke.yml so this same workflow can tear down
 # any additional spoke (e.g. live/spoke-2) without new workflow jobs.
@@ -59,6 +53,8 @@ on:
     secrets:
       AWS_DEPLOY_ROLE_ARN:
         required: true
+      ARGOCD_REGISTRATION_ROLE_ARN:
+        required: true
 
 permissions:
   id-token: write
@@ -69,8 +65,22 @@ env:
   AWS_REGION: "ap-northeast-1"
 
 jobs:
+  # ── Phase 1: deregister from ArgoCD (race-free — see that workflow) ──────
+  deregister-from-argocd:
+    name: "deregister from hub argocd (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
+    uses: ./.github/workflows/k8s-deregister-from-hub.yml
+    with:
+      spoke_dir: ${{ inputs.spoke_dir }}
+      environment: ${{ inputs.environment }}
+      hub_env: hub-${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets:
+      ARGOCD_REGISTRATION_ROLE_ARN: ${{ secrets.ARGOCD_REGISTRATION_ROLE_ARN }}
+
+  # ── Phase 2 + 3: drain remaining PVCs, then terraform destroy ────────────
   destroy-spoke:
     name: "destroy spoke infra (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
+    needs: deregister-from-argocd
     runs-on: ubuntu-latest
     # Gate via GitHub Environment protection rules (required reviewers) —
     # configure this in repo Settings > Environments for dev/prod.
@@ -98,12 +108,11 @@ jobs:
         id: instance
         run: echo "id=$(terraform output -raw master_instance_id 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
 
-      # ── Drain PVCs so the CSI driver releases their EBS volumes ──────────
+      # ── Drain any remaining PVCs (release CSI-backed EBS volumes) ────────
       # Runs BEFORE terraform destroy — the nodes and the CSI driver pods
-      # need to still be up for DeleteVolume to actually happen. Never
-      # blocks teardown: any failure here is a warning, not a job failure,
-      # since the whole point of this workflow is to tear the cluster down
-      # regardless.
+      # need to still be up for DeleteVolume to actually happen. This step
+      # is best-effort (continue-on-error): a stuck PVC logs a warning
+      # rather than blocking teardown, unlike phase 1 above.
       - name: Drain PVCs (release CSI-backed EBS volumes before teardown)
         if: steps.instance.outputs.id != ''
         id: drain
