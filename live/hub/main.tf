@@ -52,19 +52,6 @@ module "vpc" {
   region               = var.region
 }
 
-resource "null_resource" "wait_for_nat" {
-  depends_on = [module.vpc]
-
-  triggers = {
-    nat_instance_id = module.vpc.nat_instance_id
-  }
-
-  provisioner "local-exec" {
-    command    = "aws ec2 wait instance-status-ok --instance-ids ${module.vpc.nat_instance_id} --region ${var.region}"
-    on_failure = continue
-  }
-}
-
 # ── Baked k8s base AMI (built by Packer + Ansible — see /packer) ─────────────
 # Shared by both the master (module.ec2) and workers (module.asg) below.
 module "ami" {
@@ -125,7 +112,7 @@ module "asg" {
   worker_volume_size               = var.worker_volume_size
   ami_id                           = module.ami.ami_id
 
-  depends_on = [module.vpc, null_resource.wait_for_nat]
+  depends_on = [module.vpc]
 }
 
 # ── ALB — just fronts Argo CD's UI/API for this cluster ───────────────────────
