@@ -121,7 +121,7 @@ else
     fi
 
     echo "Deleting application.argoproj.io/${app} (cascade=foreground — this can take a few minutes)..."
-    kubectl delete application "$app" -n argocd --cascade=foreground --wait=true --timeout=600s || {
+    kubectl delete application "$app" -n argocd --cascade=foreground --ignore-not-found=true --wait=true --timeout=600s || {
       echo "ERROR: failed to fully delete ${app} within timeout." >&2
       exit 1
     }
