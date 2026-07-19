@@ -3,19 +3,23 @@ name: destroy-hub
 # Tears down the hub cluster (live/hub) only. Does not touch live/spoke and
 # does not touch global/network.
 #
-# Same PVC-drain rationale as destroy-spoke.yml (see .github/scripts/
-# drain-pvcs.sh.tpl for the full explanation): the hub can also run charts
-# that provision EBS volumes dynamically via the aws-ebs-csi-driver
-# (kube-prometheus-stack/Grafana, if enabled on the hub) which Terraform
-# never created and therefore would otherwise orphan. Draining runs BEFORE
-# terraform destroy, while the CSI driver is still alive to actually issue
-# the DeleteVolume calls.
+# Two phases, each its own reusable workflow, chained here for standalone
+# use — destroy-all.yml calls these same two workflows directly instead,
+# so it can interleave them with drain-spoke-pvcs.yml /
+# terraform-destroy-spoke.yml and run both clusters' terraform destroy in
+# parallel:
+#   1. drain-hub-pvcs — same PVC-drain rationale as destroy-spoke.yml (the
+#      hub can also run charts that provision EBS volumes dynamically via
+#      the aws-ebs-csi-driver, e.g. kube-prometheus-stack/Grafana if
+#      enabled on the hub, which Terraform never created).
+#   2. terraform-destroy-hub — removes the Terraform-managed infra itself.
 #
 # ⚠️ If any spoke is still registered against this hub's Argo CD, destroying
-# the hub first just means the spoke's registration goes stale (no automated
-# cleanup happens on the spoke side) — that's fine to do in either order
-# relative to destroy-spoke.yml, but destroy-network.yml must run AFTER
-# both this and destroy-spoke.yml (see that workflow's header comment).
+# the hub first just means the spoke's registration goes stale (no
+# automated cleanup happens on the spoke side) — that's fine to do in
+# either order relative to destroy-spoke.yml, but destroy-network.yml must
+# run AFTER both this and destroy-spoke.yml (see that workflow's header
+# comment).
 
 on:
   workflow_dispatch:
@@ -41,102 +45,23 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  TF_VERSION: "1.9.0"
-  AWS_REGION: "ap-northeast-1"
-
 jobs:
-  destroy-hub:
-    name: "destroy hub infra (${{ inputs.environment }})"
-    runs-on: ubuntu-latest
-    # Gate via GitHub Environment protection rules (required reviewers) —
-    # configure this in repo Settings > Environments for dev/prod.
-    environment: ${{ inputs.environment }}
-    defaults:
-      run:
-        working-directory: live/hub
-    steps:
-      - uses: actions/checkout@v4
+  # ── Phase 1: drain PVCs so the CSI driver releases their EBS volumes ─────
+  drain-hub:
+    name: "drain hub PVCs (${{ inputs.environment }})"
+    uses: ./.github/workflows/drain-hub-pvcs.yml
+    with:
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: terraform init
-        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
-
-      - name: Capture master instance id
-        id: instance
-        run: echo "id=$(terraform output -raw master_instance_id 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
-
-      # ── Drain PVCs so the CSI driver releases their EBS volumes ──────────
-      # Same as destroy-spoke.yml — see .github/scripts/drain-pvcs.sh.tpl
-      # for the full rationale. Never blocks teardown: any failure here is
-      # a warning, not a job failure.
-      - name: Drain PVCs (release CSI-backed EBS volumes before teardown)
-        if: steps.instance.outputs.id != ''
-        id: drain
-        continue-on-error: true
-        run: |
-          INSTANCE_ID="${{ steps.instance.outputs.id }}"
-
-          STATUS=$(aws ssm describe-instance-information \
-            --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
-            --query "InstanceInformationList[0].PingStatus" \
-            --output text 2>/dev/null || echo "None")
-
-          if [ "$STATUS" != "Online" ]; then
-            echo "::warning::SSM agent not reachable on $INSTANCE_ID — skipping PVC drain. \
-            CSI-backed EBS volumes may be orphaned. Check the AWS Console for volumes \
-            tagged ebs.csi.aws.com/cluster=true after this run and delete manually if needed."
-            exit 0
-          fi
-
-          B64=$(base64 -w0 ../../.github/scripts/drain-pvcs.sh.tpl)
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --timeout-seconds 600 \
-            --parameters "commands=[\"echo $B64 | base64 -d > /tmp/drain-pvcs.sh\", \"chmod +x /tmp/drain-pvcs.sh\", \"/tmp/drain-pvcs.sh\"]" \
-            --query "Command.CommandId" --output text)
-          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
-
-          for i in $(seq 1 55); do
-            ST=$(aws ssm get-command-invocation \
-              --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query "Status" --output text 2>/dev/null || echo "Pending")
-            case "$ST" in
-              Success) echo "PVC drain completed."; exit 0 ;;
-              Failed|Cancelled|TimedOut)
-                echo "::warning::PVC drain command ended with status $ST — some volumes may \
-                not have been released cleanly. Check the AWS Console for leftover volumes \
-                tagged ebs.csi.aws.com/cluster=true after this run."
-                exit 0 ;;
-              *) sleep 10 ;;
-            esac
-          done
-          echo "::warning::Timed out waiting for the PVC drain command to report a final status."
-
-      - name: Show PVC drain output
-        if: steps.drain.outputs.cmd_id != ''
-        run: |
-          aws ssm get-command-invocation \
-            --command-id "${{ steps.drain.outputs.cmd_id }}" \
-            --instance-id "${{ steps.instance.outputs.id }}" \
-            --query "StandardOutputContent" --output text || true
-
-      - name: terraform plan -destroy
-        run: |
-          terraform plan -destroy \
-            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
-            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
-            -out=tfplan
-
-      - name: terraform apply (destroy)
-        run: terraform apply -auto-approve tfplan
+  # ── Phase 2: terraform destroy ────────────────────────────────────────────
+  terraform-destroy-hub:
+    name: "terraform destroy hub infra (${{ inputs.environment }})"
+    needs: drain-hub
+    uses: ./.github/workflows/terraform-destroy-hub.yml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}

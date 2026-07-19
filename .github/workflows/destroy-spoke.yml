@@ -3,20 +3,22 @@ name: destroy-spoke
 # Tears down ONE spoke cluster's infra (default live/spoke). Does not touch
 # live/hub and does not touch global/network.
 #
-# Three phases, in order:
+# Three phases, each its own reusable workflow, chained here for standalone
+# use — destroy-all.yml calls these same three workflows directly instead,
+# so it can interleave drain-spoke-pvcs.yml / terraform-destroy-spoke.yml
+# with drain-hub-pvcs.yml / terraform-destroy-hub.yml and run both
+# clusters' terraform destroy in parallel:
 #   1. deregister-from-argocd — fully removes the spoke from ArgoCD's
-#      inventory (see .github/workflows/k8s-deregister-from-hub.yml) so
-#      nothing can recreate a workload while the next phase runs. Fails the
-#      whole job if it can't be confirmed — this is the piece that makes
-#      the rest of this pipeline race-free rather than best-effort.
-#   2. drain-spoke — drains every remaining PersistentVolumeClaim
-#      (.github/scripts/drain-pvcs.sh.tpl) so the aws-ebs-csi-driver issues
-#      DeleteVolume for every EBS volume Terraform never created (postgresql,
-#      kube-prometheus-stack, Loki, Tempo). Runs risk-free now that ArgoCD
-#      can no longer resurrect anything. This step is best-effort — a stuck
-#      PVC logs a warning rather than blocking teardown, since the whole
-#      point of this workflow is to tear the cluster down regardless.
-#   3. terraform destroy — removes the Terraform-managed infra itself.
+#      inventory (see k8s-deregister-from-hub.yml) so nothing can recreate
+#      a workload while draining runs. Fails the whole job if it can't be
+#      confirmed — this is the piece that makes the rest of this pipeline
+#      race-free rather than best-effort.
+#   2. drain-spoke-pvcs — drains every remaining PersistentVolumeClaim so
+#      the aws-ebs-csi-driver issues DeleteVolume for every EBS volume
+#      Terraform never created. Runs risk-free now that ArgoCD can no
+#      longer resurrect anything. Best-effort — a stuck PVC logs a warning
+#      rather than blocking teardown.
+#   3. terraform-destroy-spoke — removes the Terraform-managed infra itself.
 #
 # NOTE: this only destroys the Terraform-managed infra and the ArgoCD
 # registration (phase 1). It does NOT remove the argocd-clusters/<name>
@@ -60,10 +62,6 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  TF_VERSION: "1.9.0"
-  AWS_REGION: "ap-northeast-1"
-
 jobs:
   # ── Phase 1: deregister from ArgoCD (race-free — see that workflow) ──────
   deregister-from-argocd:
@@ -77,101 +75,25 @@ jobs:
     secrets:
       ARGOCD_REGISTRATION_ROLE_ARN: ${{ secrets.ARGOCD_REGISTRATION_ROLE_ARN }}
 
-  # ── Phase 2 + 3: drain remaining PVCs, then terraform destroy ────────────
-  destroy-spoke:
-    name: "destroy spoke infra (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
+  # ── Phase 2: drain remaining PVCs (release CSI-backed EBS volumes) ───────
+  drain-spoke:
+    name: "drain spoke PVCs (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
     needs: deregister-from-argocd
-    runs-on: ubuntu-latest
-    # Gate via GitHub Environment protection rules (required reviewers) —
-    # configure this in repo Settings > Environments for dev/prod.
-    environment: ${{ inputs.environment }}
-    defaults:
-      run:
-        working-directory: ${{ inputs.spoke_dir }}
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/drain-spoke-pvcs.yml
+    with:
+      spoke_dir: ${{ inputs.spoke_dir }}
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: terraform init
-        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
-
-      - name: Capture master instance id
-        id: instance
-        run: echo "id=$(terraform output -raw master_instance_id 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
-
-      # ── Drain any remaining PVCs (release CSI-backed EBS volumes) ────────
-      # Runs BEFORE terraform destroy — the nodes and the CSI driver pods
-      # need to still be up for DeleteVolume to actually happen. This step
-      # is best-effort (continue-on-error): a stuck PVC logs a warning
-      # rather than blocking teardown, unlike phase 1 above.
-      - name: Drain PVCs (release CSI-backed EBS volumes before teardown)
-        if: steps.instance.outputs.id != ''
-        id: drain
-        continue-on-error: true
-        run: |
-          INSTANCE_ID="${{ steps.instance.outputs.id }}"
-
-          STATUS=$(aws ssm describe-instance-information \
-            --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
-            --query "InstanceInformationList[0].PingStatus" \
-            --output text 2>/dev/null || echo "None")
-
-          if [ "$STATUS" != "Online" ]; then
-            echo "::warning::SSM agent not reachable on $INSTANCE_ID — skipping PVC drain. \
-            CSI-backed EBS volumes (postgresql, kube-prometheus-stack, Loki, Tempo) may be \
-            orphaned. Check the AWS Console for volumes tagged ebs.csi.aws.com/cluster=true \
-            after this run and delete manually if needed."
-            exit 0
-          fi
-
-          B64=$(base64 -w0 ../../.github/scripts/drain-pvcs.sh.tpl)
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --timeout-seconds 600 \
-            --parameters "commands=[\"echo $B64 | base64 -d > /tmp/drain-pvcs.sh\", \"chmod +x /tmp/drain-pvcs.sh\", \"/tmp/drain-pvcs.sh\"]" \
-            --query "Command.CommandId" --output text)
-          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
-
-          for i in $(seq 1 55); do
-            ST=$(aws ssm get-command-invocation \
-              --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query "Status" --output text 2>/dev/null || echo "Pending")
-            case "$ST" in
-              Success) echo "PVC drain completed."; exit 0 ;;
-              Failed|Cancelled|TimedOut)
-                echo "::warning::PVC drain command ended with status $ST — some volumes may \
-                not have been released cleanly. Check the AWS Console for leftover volumes \
-                tagged ebs.csi.aws.com/cluster=true after this run."
-                exit 0 ;;
-              *) sleep 10 ;;
-            esac
-          done
-          echo "::warning::Timed out waiting for the PVC drain command to report a final status."
-
-      - name: Show PVC drain output
-        if: steps.drain.outputs.cmd_id != ''
-        run: |
-          aws ssm get-command-invocation \
-            --command-id "${{ steps.drain.outputs.cmd_id }}" \
-            --instance-id "${{ steps.instance.outputs.id }}" \
-            --query "StandardOutputContent" --output text || true
-
-      - name: terraform plan -destroy
-        run: |
-          terraform plan -destroy \
-            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
-            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
-            -out=tfplan
-
-      - name: terraform apply (destroy)
-        run: terraform apply -auto-approve tfplan
+  # ── Phase 3: terraform destroy ────────────────────────────────────────────
+  terraform-destroy-spoke:
+    name: "terraform destroy spoke infra (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
+    needs: drain-spoke
+    uses: ./.github/workflows/terraform-destroy-spoke.yml
+    with:
+      spoke_dir: ${{ inputs.spoke_dir }}
+      environment: ${{ inputs.environment }}
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}

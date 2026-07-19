@@ -20,6 +20,7 @@ controllerManager:
   extraArgs:
     cloud-provider: "external"
     bind-address: "0.0.0.0"
+    allocate-node-cidrs: "true"
 scheduler:
   extraArgs:
     bind-address: "0.0.0.0"
