@@ -33,12 +33,11 @@ resource "null_resource" "wait_for_nat" {
   depends_on = [module.vpc]
 
   triggers = {
-    nat_instance_id = module.vpc.nat_instance_id
+    nat_gateway_id = module.vpc.nat_gateway_id
   }
 
-  # See live/hub/main.tf for the rationale on this provisioner.
   provisioner "local-exec" {
-    command    = "aws ec2 wait instance-status-ok --instance-ids ${module.vpc.nat_instance_id} --region ${var.region}"
+    command    = "aws ec2 wait nat-gateway-available --nat-gateway-ids ${module.vpc.nat_gateway_id} --region ${var.region}"
     on_failure = continue
   }
 }

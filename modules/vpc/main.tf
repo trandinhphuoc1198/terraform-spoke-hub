@@ -36,66 +36,21 @@ resource "aws_subnet" "private" {
   tags = { Name = "${var.env}-private-subnet-${count.index + 1}" }
 }
 
-# ── NAT instance (t3.small) — cheaper replacement for NAT Gateway ──────────
-data "aws_ami" "amazon_linux_2" {
-  most_recent = true
-  owners      = ["amazon"]
+# ── NAT Gateway (AWS managed, single AZ) ─────────────────────────────────
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = { Name = "${var.env}-nat-eip" }
 
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
-
-resource "aws_security_group" "nat" {
-  name        = "${var.env}-nat-sg"
-  description = "Security group for NAT instance"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = var.private_subnet_cidrs
-    description = "Allow all traffic from private subnets"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = { Name = "${var.env}-nat-sg" }
-}
-
-resource "aws_instance" "nat" {
-  ami                         = data.aws_ami.amazon_linux_2.id
-  instance_type               = var.nat_instance_type
-  subnet_id                   = aws_subnet.public[0].id
-  vpc_security_group_ids      = [aws_security_group.nat.id]
-  associate_public_ip_address = true
-  source_dest_check           = false
-
-  user_data = <<-EOF
-              #!/bin/bash
-              sysctl -w net.ipv4.ip_forward=1
-              iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-              yum install -y iptables-services
-              service iptables save
-              systemctl enable iptables
-              systemctl start iptables
-              EOF
-
-  tags       = { Name = "${var.env}-nat-instance" }
   depends_on = [aws_internet_gateway.igw]
 }
 
-resource "aws_eip" "nat" {
-  instance = aws_instance.nat.id
-  domain   = "vpc"
-  tags     = { Name = "${var.env}-nat-eip" }
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = { Name = "${var.env}-nat-gateway" }
+
+  depends_on = [aws_internet_gateway.igw]
 }
 
 # ── S3 endpoint (Gateway) ──────────────────────────────────────────────────
@@ -197,7 +152,7 @@ resource "aws_route_table" "private" {
 resource "aws_route" "private_default" {
   route_table_id         = aws_route_table.private.id
   destination_cidr_block = "0.0.0.0/0"
-  network_interface_id   = aws_instance.nat.primary_network_interface_id
+  nat_gateway_id         = aws_nat_gateway.main.id
 }
 
 resource "aws_route_table_association" "private" {
