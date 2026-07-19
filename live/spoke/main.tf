@@ -91,7 +91,7 @@ module "asg" {
   worker_volume_size               = var.worker_volume_size
   ami_id                           = module.ami.ami_id
 
-  depends_on = [module.vpc, null_resource.wait_for_nat]
+  depends_on = [module.vpc]
 }
 
 # ── ALB — app workloads (NOT Argo CD — that's on the hub's ALB now) ──────────

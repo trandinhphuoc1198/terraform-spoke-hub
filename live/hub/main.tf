@@ -112,7 +112,7 @@ module "asg" {
   worker_volume_size               = var.worker_volume_size
   ami_id                           = module.ami.ami_id
 
-  depends_on = [module.vpc, null_resource.wait_for_nat]
+  depends_on = [module.vpc]
 }
 
 # ── ALB — just fronts Argo CD's UI/API for this cluster ───────────────────────
