@@ -285,6 +285,13 @@ resource "aws_iam_role" "worker" {
   tags = { Name = "${var.env}-k8s-worker-role", Env = var.env }
 }
 
+# ── Worker → SSM Session Manager ────────────────────────────────────────────
+resource "aws_iam_role_policy_attachment" "worker_ssm" {
+  role       = aws_iam_role.worker.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+
 # NOTE: create/delete actions are scoped with aws:RequestTag /
 # aws:ResourceTag conditions against kubernetes.io/cluster/<cluster_name>,
 # the same tag the ASG (modules/asg) already applies to every worker
