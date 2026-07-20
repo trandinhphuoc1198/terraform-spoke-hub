@@ -80,12 +80,13 @@ if [ "$STILL_THERE" -ne 0 ]; then
   echo "ERROR: cluster registration Secret still present after delete." >&2
   exit 1
 fi
-echo "Confirmed: cluster no longer in ArgoCD's inventory. No generator can recreate Applications for it now."
+echo "Confirmed: cluster no longer in ArgoCD's inventory."
+
+# Allow time for ApplicationSet controller reconciliation queue to settle after Secret removal
+echo "Waiting 5s for ApplicationSet controller reconciliation to settle..."
+sleep 5
 
 # ── Step 2: delete every Application ArgoCD generated for this spoke ───────
-# Discovered dynamically and sorted by descending sync-wave (highest wave —
-# e.g. fastapi-app at 50 — deleted first; lowest — e.g. cilium at 00 —
-# deleted last / excluded), so no hardcoded release list to maintain.
 is_excluded() {
   local release="$1"
   for ex in "${EXCLUDED_RELEASES[@]}"; do
@@ -95,39 +96,55 @@ is_excluded() {
 }
 
 echo "--- Discovering Applications targeting this cluster (sorted by descending sync-wave) ---"
-APP_LIST=$(kubectl get applications -n argocd -o json 2>/dev/null | jq -r --arg cn "$CLUSTER_NAME" '
-  [ .items[]
-    | select(.metadata.name | endswith("-" + $cn))
-    | { name: .metadata.name,
-        wave: ((.metadata.annotations["argocd.argoproj.io/sync-wave"] // "-1") | tonumber) }
-  ]
-  | sort_by(-.wave)
-  | .[].name
-')
 
-if [ -z "$APP_LIST" ]; then
-  echo "No Applications found for cluster ${CLUSTER_NAME}."
-else
-  echo "Deletion order:"
-  echo "$APP_LIST"
-  echo
+# Retry loop handles tail-end ApplicationSet reconciliations
+MAX_ATTEMPTS=3
+attempt=1
 
+while [ $attempt -le $MAX_ATTEMPTS ]; do
+  APP_LIST=$(kubectl get applications -n argocd -o json 2>/dev/null | jq -r --arg cn "$CLUSTER_NAME" '
+    [ .items[]
+      | select(.metadata.name | endswith("-" + $cn))
+      | { name: .metadata.name,
+          wave: ((.metadata.annotations["argocd.argoproj.io/sync-wave"] // "-1") | tonumber) }
+    ]
+    | sort_by(-.wave)
+    | .[].name
+  ')
+
+  APPS_TO_DELETE=""
   for app in $APP_LIST; do
     release="${app%-${CLUSTER_NAME}}"
-
-    if is_excluded "$release"; then
-      echo "Skipping ${app} (excluded — node-critical infra, delete after drain-pvcs.sh)"
-      continue
+    if ! is_excluded "$release"; then
+      APPS_TO_DELETE="${APPS_TO_DELETE} ${app}"
     fi
+  done
 
+  # Trim spaces
+  APPS_TO_DELETE=$(echo "$APPS_TO_DELETE" | xargs)
+
+  if [ -z "$APPS_TO_DELETE" ]; then
+    echo "No non-excluded Applications remaining to delete."
+    break
+  fi
+
+  echo "Pass $attempt/$MAX_ATTEMPTS — Deleting applications:"
+  echo "$APPS_TO_DELETE"
+  echo
+
+  for app in $APPS_TO_DELETE; do
     echo "Deleting application.argoproj.io/${app} (cascade=foreground — this can take a few minutes)..."
     kubectl delete application "$app" -n argocd --cascade=foreground --ignore-not-found=true --wait=true --timeout=600s || {
       echo "ERROR: failed to fully delete ${app} within timeout." >&2
       exit 1
     }
   done
-fi
 
+  attempt=$((attempt + 1))
+  [ $attempt -le $MAX_ATTEMPTS ] && sleep 3
+done
+
+# ── Step 3: Verify deletion ──────────────────────────────────────────────────
 echo "--- Verifying no non-excluded Applications remain for this cluster ---"
 REMAINING=$(kubectl get applications -n argocd -o name 2>/dev/null | grep -- "-${CLUSTER_NAME}$" || true)
 UNEXPECTED=""
