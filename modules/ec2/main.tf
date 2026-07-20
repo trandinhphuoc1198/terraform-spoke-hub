@@ -233,6 +233,26 @@ resource "aws_iam_role_policy" "master_ccm_policy" {
             "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
           }
         }
+      },
+      {
+        # Native routing (Cilium routingMode: native) needs the route
+        # controller (--configure-cloud-routes=true, aws-ccm.yaml) to be
+        # able to write per-node pod-CIDR routes into the VPC route table
+        # modules/vpc tags with kubernetes.io/cluster/${var.cluster_name}.
+        # DescribeRouteTables is already covered by ReadOnlyDescribe above.
+        Sid    = "ManageRoutesInThisClustersRouteTable"
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateRoute",
+          "ec2:DeleteRoute",
+          "ec2:ReplaceRoute"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+          }
+        }
       }
     ]
   })
@@ -442,6 +462,12 @@ resource "aws_instance" "master" {
   vpc_security_group_ids      = [aws_security_group.master.id]
   key_name                    = var.key_name
   iam_instance_profile        = aws_iam_instance_profile.master.name
+
+  # Required for Cilium native routing: AWS drops any packet whose source
+  # IP doesn't match the ENI's own primary/secondary IP unless this check
+  # is disabled. Pods running on the master (it's not cordoned) send
+  # traffic with a pod-CIDR source IP, not the instance's ENI IP.
+  source_dest_check = false
 
   root_block_device {
     volume_size = var.master_volume_size
