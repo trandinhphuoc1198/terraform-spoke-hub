@@ -52,7 +52,7 @@ module "vpc" {
   region               = var.region
   # Tags the private route table for AWS CCM's route controller to
   # discover (Cilium native routing) — see modules/vpc/main.tf.
-  cluster_name = var.cluster_name
+  cluster_name         = var.cluster_name
 }
 
 # ── Baked k8s base AMI (built by Packer + Ansible — see /packer) ─────────────
