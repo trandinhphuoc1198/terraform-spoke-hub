@@ -5,7 +5,11 @@
 #
 # Deliberately NOT baked (still handled at instance-launch time by
 # modules/k8s's user_data, since it's per-instance/dynamic):
-#   kubeadm init/join, CNI, AWS CCM, Argo CD, the join-token SSM dance.
+#   kubeadm init/join, CNI, AWS CCM, the join-token SSM dance.
+#
+# The "disable source/dest check" systemd unit below IS fully generic and
+# baked here (unlike the above) even though it also runs at every boot —
+# see the comment on that task block for why.
 
 - name: Bake k8s base image
   hosts: all
@@ -173,3 +177,69 @@
         name: kubelet
         enabled: true
         state: started
+
+    # ── Disable source/dest check (Cilium native routing) ──────────────────
+    # This one IS baked into the AMI, unlike kubeadm init/join/CCM above,
+    # because it's fully generic — "ask IMDS who I am, tell AWS to stop
+    # checking my source/dest" needs no per-cluster values (no join token,
+    # no cluster name, nothing that only exists at Terraform-apply time).
+    # Baking it means modules/k8s/templates/worker_init.sh.tpl doesn't
+    # need to carry this logic at all; it runs identically on the master
+    # too (redundant with — but harmless alongside — the master's
+    # declarative source_dest_check=false in modules/ec2/main.tf, since
+    # aws_instance supports that argument directly and
+    # aws_launch_template's network_interfaces block still doesn't:
+    # hashicorp/terraform-provider-aws#29561).
+    #
+    # Needs ec2:ModifyInstanceAttribute at runtime — see the
+    # worker_self_manage IAM policy in modules/ec2/main.tf (master already
+    # has this permission via master_ccm_policy's tag-scoped statement).
+    - name: Install disable-source-dest-check script
+      ansible.builtin.copy:
+        dest: /usr/local/bin/disable-source-dest-check.sh
+        mode: "0755"
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+          AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+          INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+
+          echo "Disabling source/dest check on $INSTANCE_ID ($AWS_REGION)..."
+          aws ec2 modify-instance-attribute \
+            --instance-id "$INSTANCE_ID" \
+            --source-dest-check '{"Value": false}' \
+            --region "$AWS_REGION"
+
+    - name: Install disable-source-dest-check systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/disable-source-dest-check.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Disable source/dest check on this instance for Cilium native routing
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/disable-source-dest-check.sh
+          # Retries a handful of times in case the instance's IAM
+          # credentials/network aren't fully ready yet at this point in boot.
+          Restart=on-failure
+          RestartSec=10s
+          StartLimitBurst=5
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable disable-source-dest-check service
+      ansible.builtin.systemd:
+        name: disable-source-dest-check.service
+        enabled: true
+        daemon_reload: true
+        # Not started here — no network/IAM role attached yet during the
+        # Packer build. It runs for real on first boot of any instance
+        # launched from this AMI (master and worker alike), per
+        # WantedBy=multi-user.target above.

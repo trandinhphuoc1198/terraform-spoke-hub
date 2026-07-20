@@ -22,12 +22,6 @@ resource "aws_launch_template" "worker" {
   network_interfaces {
     associate_public_ip_address = false
     security_groups             = [var.worker_sg_id]
-    # Required for Cilium native routing: AWS drops any packet whose
-    # source IP doesn't match the ENI's own primary/secondary IP unless
-    # this check is disabled — pods send traffic with a pod-CIDR source
-    # IP, not the worker's ENI IP. Mirrors master's source_dest_check in
-    # modules/ec2/main.tf.
-    source_dest_check = false
   }
 
   block_device_mappings {
