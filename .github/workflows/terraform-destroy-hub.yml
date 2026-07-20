@@ -1,0 +1,59 @@
+name: terraform-destroy-hub
+
+# Runs `terraform destroy` for live/hub. Split out of destroy-hub.yml so
+# destroy-all.yml can run this in parallel with terraform-destroy-spoke.yml
+# once both clusters have finished draining PVCs (see destroy-all.yml).
+# Assumes drain-hub-pvcs.yml already ran — this workflow does not enforce
+# that itself, the caller does via `needs:`.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.9.0"
+  AWS_REGION: "ap-northeast-1"
+
+jobs:
+  terraform-destroy-hub:
+    name: "terraform destroy hub infra (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: live/hub
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+
+      - name: terraform plan -destroy
+        run: |
+          terraform plan -destroy \
+            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
+            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
+            -out=tfplan
+
+      - name: terraform apply (destroy)
+        run: terraform apply -auto-approve tfplan

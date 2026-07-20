@@ -76,6 +76,15 @@ done
 # ── CNI ─────────────────────────────────────────────────────────────────
 # Unconditional — every cluster (hub and spoke) needs pod networking to
 # reach Ready, regardless of whether it also runs Argo CD/CCM/ESO.
+#
+# routingMode=native (was tunnel): pod traffic between nodes is no longer
+# VXLAN-encapsulated. Nodes span multiple AZs/subnets (not L2-adjacent),
+# so autoDirectNodeRoutes stays off — cross-node pod routing depends on
+# the AWS CCM route controller installed below keeping the VPC route
+# table in sync with each node's podCIDR. See
+# platform/values/base/cilium.yaml for the full rationale; this inline
+# install just needs to match those values for day-0 bootstrap, since
+# ArgoCD only takes over reconciliation afterward.
 echo "=== Installing CNI ===" >> /var/log/kubeadm-init.log
 helm repo add cilium https://helm.cilium.io/
 helm repo update
@@ -89,7 +98,9 @@ for i in $(seq 1 5); do
   --set kubeProxyReplacement=true \
   --set k8sServiceHost="$PRIVATE_IP" \
   --set k8sServicePort="6443" \
-  --set routingMode=tunnel \
+  --set routingMode=native \
+  --set ipv4NativeRoutingCIDR="${pod_cidr}" \
+  --set autoDirectNodeRoutes=false \
   --set ipam.mode=kubernetes \
   --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \
   --set nodePort.enabled=true \
@@ -119,12 +130,20 @@ done
 # schedule — including Argo CD's own pods, which is why this can't be an
 # Argo CD Application (Argo CD's chart ships no toleration for this taint;
 # CNI's DaemonSet does, which is why CNI is safe to apply before this step).
+#
+# --configure-cloud-routes=true (was false): with Cilium routingMode=native
+# above, this is what actually makes cross-AZ pod traffic routable — CCM's
+# route controller watches node.spec.podCIDR and syncs the matching route
+# into the VPC route table modules/vpc tags with
+# kubernetes.io/cluster/<cluster_name> (master's IAM role
+# — master_ccm_policy in modules/ec2/main.tf — is scoped to that same tag).
+# --cluster-cidr is required for the route controller to start.
 echo "=== Installing AWS CCM ===" >> /var/log/kubeadm-init.log
 helm repo add aws-cloud-controller-manager https://kubernetes.github.io/cloud-provider-aws
 helm repo update
 helm upgrade --install aws-cloud-controller-manager aws-cloud-controller-manager/aws-cloud-controller-manager \
   --namespace kube-system \
-  --set 'args={--v=2,--cloud-provider=aws,--configure-cloud-routes=false}'
+  --set 'args={--v=2,--cloud-provider=aws,--configure-cloud-routes=true,--cluster-cidr=${pod_cidr}}'
 
 echo "=== Waiting for uninitialized taint to clear ===" >> /var/log/kubeadm-init.log
 timeout 120 bash -c 'until ! kubectl get nodes -o json | grep -q "node.cloudprovider.kubernetes.io/uninitialized"; do sleep 5; done'

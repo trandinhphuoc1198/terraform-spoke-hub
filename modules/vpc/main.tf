@@ -146,7 +146,15 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "${var.env}-private-rt" }
+  tags = {
+    Name = "${var.env}-private-rt"
+    # Lets AWS Cloud Controller Manager's route controller
+    # (--configure-cloud-routes=true, platform/values/base/aws-ccm.yaml)
+    # find this table to sync per-node pod-CIDR routes for Cilium native
+    # routing. Same tag/value convention as the kubernetes.io/cluster/*
+    # tags already on instances (modules/ec2) and the ASG (modules/asg).
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+  }
 }
 
 resource "aws_route" "private_default" {
