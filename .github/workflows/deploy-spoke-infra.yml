@@ -15,6 +15,9 @@ name: deploy-spoke-infra
 # For a single day-2 spoke change where you just want the full chain
 # (infra -> bootstrap -> register -> verify) in one run, use deploy-spoke.yml
 # instead — it calls this same infra chain plus the verify step, sequentially.
+#
+# The actual terraform init/plan/apply steps live in the shared
+# terraform-apply.yml reusable workflow.
 
 on:
   workflow_dispatch:
@@ -51,7 +54,7 @@ on:
     outputs:
       cluster_name:
         description: "cluster_name output of the spoke's terraform root — needed by verify-spoke-registration.yml"
-        value: ${{ jobs.deploy-spoke.outputs.cluster_name }}
+        value: ${{ jobs.deploy-spoke.outputs.terraform_output_value }}
     secrets:
       AWS_DEPLOY_ROLE_ARN:
         required: true
@@ -60,51 +63,19 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  TF_VERSION: "1.9.0"
-  AWS_REGION: "ap-northeast-1"
-
 jobs:
   # ── 1. spoke terraform apply ─────────────────────────────────────────────
   deploy-spoke:
     name: "spoke infra (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    outputs:
-      cluster_name: ${{ steps.cluster_name.outputs.value }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: terraform init
-        working-directory: ${{ inputs.spoke_dir }}
-        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
-
-      - name: terraform plan
-        working-directory: ${{ inputs.spoke_dir }}
-        run: |
-          terraform plan \
-            -var-file="envs/${{ inputs.environment }}/terraform.tfvars" \
-            -var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate" \
-            -out=tfplan
-
-      - name: terraform apply
-        working-directory: ${{ inputs.spoke_dir }}
-        run: terraform apply -auto-approve tfplan
-
-      - name: Capture cluster_name output
-        id: cluster_name
-        working-directory: ${{ inputs.spoke_dir }}
-        run: echo "value=$(terraform output -raw cluster_name)" >> "$GITHUB_OUTPUT"
+    uses: ./.github/workflows/terraform-apply.yml
+    with:
+      working_directory: ${{ inputs.spoke_dir }}
+      environment: ${{ inputs.environment }}
+      extra_tf_vars: '-var="network_state_key=global/network/${{ inputs.environment }}/terraform.tfstate"'
+      terraform_output_name: cluster_name
+      aws_region: ap-northeast-1
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
 
   # ── 2. kubeadm init + CNI on the spoke master ────────────────────────────
   bootstrap-cluster-spoke:
@@ -128,7 +99,7 @@ jobs:
       working_directory: ${{ inputs.spoke_dir }}
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
-      cluster_name: ${{ needs.deploy-spoke.outputs.cluster_name }}
+      cluster_name: ${{ needs.deploy-spoke.outputs.terraform_output_value }}
       cluster_role: ${{ inputs.cluster_role }}
       env_name: spoke-${{ inputs.environment }}
     secrets: inherit

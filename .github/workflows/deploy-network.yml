@@ -8,6 +8,9 @@ name: deploy-network
 # NOTE: this is the piece both live/hub and live/spoke read via
 # terraform_remote_state — it must exist before either of those roots is
 # applied for the first time (see deploy-all.yml for full bring-up order).
+#
+# The actual terraform init/plan/apply steps live in the shared
+# terraform-apply.yml reusable workflow.
 
 on:
   workflow_dispatch:
@@ -33,36 +36,15 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  TF_VERSION: "1.9.0"
-  AWS_REGION: "ap-northeast-1"
-
 jobs:
   deploy-network:
     name: "network (${{ inputs.environment }})"
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    defaults:
-      run:
-        working-directory: global/network
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: terraform init
-        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
-
-      - name: terraform plan
-        run: terraform plan -var="env_prefix=${{ inputs.environment }}" -out=tfplan
-
-      - name: terraform apply
-        run: terraform apply -auto-approve tfplan
+    uses: ./.github/workflows/terraform-apply.yml
+    with:
+      working_directory: global/network
+      environment: ${{ inputs.environment }}
+      use_var_file: false
+      extra_tf_vars: '-var="env_prefix=${{ inputs.environment }}"'
+      aws_region: ap-northeast-1
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}

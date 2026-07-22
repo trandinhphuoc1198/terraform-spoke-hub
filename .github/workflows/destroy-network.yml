@@ -8,6 +8,9 @@ name: destroy-network
 # even `terraform plan`) will fail trying to resolve that data source.
 # Destroy live/spoke and live/hub first (destroy-spoke.yml / destroy-hub.yml,
 # or destroy-all.yml which sequences all three correctly).
+#
+# The actual terraform init/plan -destroy/apply steps live in the shared
+# terraform-apply.yml reusable workflow.
 
 on:
   workflow_dispatch:
@@ -33,38 +36,21 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  TF_VERSION: "1.9.0"
-  AWS_REGION: "ap-northeast-1"
-
 jobs:
   destroy-network:
     name: "destroy network (${{ inputs.environment }})"
-    runs-on: ubuntu-latest
-    # Gate via GitHub Environment protection rules (required reviewers) —
-    # configure this in repo Settings > Environments for dev/prod.
-    environment: ${{ inputs.environment }}
-    defaults:
-      run:
-        working-directory: global/network
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: terraform init
-        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
-
-      - name: terraform plan -destroy
-        run: terraform plan -destroy -var="env_prefix=${{ inputs.environment }}" -out=tfplan
-
-      - name: terraform apply (destroy)
-        run: terraform apply -auto-approve tfplan
+    # Deployment protection rules (required reviewers, etc.) for dev/prod
+    # are applied inside terraform-apply.yml's own job, which does set
+    # environment: — GitHub doesn't support `environment:` on a job that
+    # just calls a reusable workflow (uses:), only on a real job with
+    # runs-on.
+    uses: ./.github/workflows/terraform-apply.yml
+    with:
+      working_directory: global/network
+      environment: ${{ inputs.environment }}
+      destroy: true
+      use_var_file: false
+      extra_tf_vars: '-var="env_prefix=${{ inputs.environment }}"'
+      aws_region: ap-northeast-1
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
