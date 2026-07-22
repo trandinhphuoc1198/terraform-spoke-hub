@@ -5,6 +5,9 @@ name: k8s-cluster-bootstrap
 # a failed CI job with logs, instead of hiding in cloud-init on a box
 # nobody's watching. Called by deploy-hub.yml / deploy-spoke.yml after the
 # corresponding `terraform apply`, before hub/argocd registration steps.
+#
+# The actual send-command + poll loop lives in the shared
+# .github/actions/ssm-run-script composite action.
 
 on:
   workflow_call:
@@ -77,29 +80,14 @@ jobs:
 
       - name: Run kubeadm init + CNI via SSM
         id: bootstrap
-        run: |
-          B64=$(base64 -w0 /tmp/bootstrap.sh)
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "${{ steps.instance.outputs.id }}" \
-            --document-name "AWS-RunShellScript" \
-            --timeout-seconds 900 \
-            --parameters "commands=[\"echo $B64 | base64 -d > /tmp/bootstrap.sh\", \"chmod +x /tmp/bootstrap.sh\", \"/tmp/bootstrap.sh\"]" \
-            --query "Command.CommandId" --output text)
-          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/ssm-run-script
+        with:
+          instance-id: ${{ steps.instance.outputs.id }}
+          script-path: /tmp/bootstrap.sh
+          timeout-seconds: "900"
+          max-poll-attempts: "90"
+          poll-interval-seconds: "10"
 
-          for i in $(seq 1 90); do
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "$CMD_ID" \
-              --instance-id "${{ steps.instance.outputs.id }}" \
-              --query "Status" --output text 2>/dev/null || echo "Pending")
-            case "$STATUS" in
-              Success) echo "Command succeeded."; exit 0 ;;
-              Failed|Cancelled|TimedOut) echo "::error::Command ended with status $STATUS"; exit 1 ;;
-              *) echo "Status: $STATUS (attempt $i/90)"; sleep 10 ;;
-            esac
-          done
-          echo "::error::Timed out waiting for command completion"
-          exit 1
       - name: Show bootstrap output on failure
         if: failure()
         run: |

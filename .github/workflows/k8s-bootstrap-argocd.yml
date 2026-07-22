@@ -5,6 +5,9 @@ name: k8s-bootstrap-argocd
 # Also seeds the aws-creds Secret ESO needs — the one piece that can't
 # come from ESO itself. Runs once per hub environment, idempotent via
 # helm upgrade --install / kubectl apply. Called by deploy-hub.yml.
+#
+# The actual send-command + poll loop for both SSM calls lives in the
+# shared .github/actions/ssm-run-script composite action.
 
 on:
   workflow_call:
@@ -72,29 +75,13 @@ jobs:
 
       - name: Install Argo CD via SSM
         id: argocd
-        run: |
-          B64=$(base64 -w0 /tmp/bootstrap-argocd.sh)
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "${{ steps.instance.outputs.id }}" \
-            --document-name "AWS-RunShellScript" \
-            --timeout-seconds 900 \
-            --parameters "commands=[\"echo $B64 | base64 -d > /tmp/bootstrap-argocd.sh\", \"chmod +x /tmp/bootstrap-argocd.sh\", \"/tmp/bootstrap-argocd.sh\"]" \
-            --query "Command.CommandId" --output text)
-          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
-          
-          for i in $(seq 1 90); do
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "$CMD_ID" \
-              --instance-id "${{ steps.instance.outputs.id }}" \
-              --query "Status" --output text 2>/dev/null || echo "Pending")
-            case "$STATUS" in
-              Success) echo "Command succeeded."; exit 0 ;;
-              Failed|Cancelled|TimedOut) echo "::error::Command ended with status $STATUS"; exit 1 ;;
-              *) echo "Status: $STATUS (attempt $i/90)"; sleep 10 ;;
-            esac
-          done
-          echo "::error::Timed out waiting for command completion"
-          exit 1
+        uses: ./.github/actions/ssm-run-script
+        with:
+          instance-id: ${{ steps.instance.outputs.id }}
+          script-path: /tmp/bootstrap-argocd.sh
+          timeout-seconds: "900"
+          max-poll-attempts: "90"
+          poll-interval-seconds: "10"
 
       - name: Show output on failure
         if: failure()
@@ -111,12 +98,25 @@ jobs:
             -e "s|__ENV__|${{ inputs.env_name }}|g" \
             ../../.github/scripts/bootstrap-eso-secret.sh.tpl > /tmp/bootstrap-eso-secret.sh
 
+      # NOTE: this now actually checks the command's terminal status
+      # (fail-on-error defaults to "true"), unlike the previous
+      # `aws ssm wait command-executed` version, which returned success as
+      # soon as the command finished regardless of whether the script
+      # itself succeeded.
       - name: Seed ESO aws-creds secret via SSM
+        id: eso_secret
+        uses: ./.github/actions/ssm-run-script
+        with:
+          instance-id: ${{ steps.instance.outputs.id }}
+          script-path: /tmp/bootstrap-eso-secret.sh
+          timeout-seconds: "300"
+          max-poll-attempts: "30"
+          poll-interval-seconds: "10"
+
+      - name: Show ESO secret output on failure
+        if: failure()
         run: |
-          B64=$(base64 -w0 /tmp/bootstrap-eso-secret.sh)
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "${{ steps.instance.outputs.id }}" \
-            --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"echo $B64 | base64 -d > /tmp/bootstrap-eso-secret.sh\", \"chmod +x /tmp/bootstrap-eso-secret.sh\", \"/tmp/bootstrap-eso-secret.sh\"]" \
-            --query "Command.CommandId" --output text)
-          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}"
+          aws ssm get-command-invocation \
+            --command-id "${{ steps.eso_secret.outputs.cmd_id }}" \
+            --instance-id "${{ steps.instance.outputs.id }}" \
+            --query "{stdout:StandardOutputContent,stderr:StandardErrorContent}"

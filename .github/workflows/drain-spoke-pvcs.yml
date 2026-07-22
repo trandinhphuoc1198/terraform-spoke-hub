@@ -10,7 +10,10 @@ name: drain-spoke-pvcs
 #
 # Best-effort: a stuck PVC logs a warning rather than failing the job,
 # since the whole point of the destroy pipeline is to tear the cluster
-# down regardless.
+# down regardless. The actual send-command + poll loop lives in the
+# shared .github/actions/ssm-run-script composite action (called here
+# with fail-on-error: "false" so we can inspect the status ourselves and
+# warn instead of failing).
 
 on:
   workflow_call:
@@ -60,50 +63,44 @@ jobs:
         id: instance
         run: echo "id=$(terraform output -raw master_instance_id 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
 
-      - name: Drain PVCs (release CSI-backed EBS volumes before teardown)
+      - name: Check SSM agent status
+        id: ssm_check
         if: steps.instance.outputs.id != ''
-        id: drain
-        continue-on-error: true
         run: |
           INSTANCE_ID="${{ steps.instance.outputs.id }}"
-
           STATUS=$(aws ssm describe-instance-information \
             --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
             --query "InstanceInformationList[0].PingStatus" \
             --output text 2>/dev/null || echo "None")
 
-          if [ "$STATUS" != "Online" ]; then
+          if [ "$STATUS" = "Online" ]; then
+            echo "online=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "online=false" >> "$GITHUB_OUTPUT"
             echo "::warning::SSM agent not reachable on $INSTANCE_ID — skipping PVC drain. \
             CSI-backed EBS volumes (postgresql, kube-prometheus-stack, Loki, Tempo) may be \
             orphaned. Check the AWS Console for volumes tagged ebs.csi.aws.com/cluster=true \
             after this run and delete manually if needed."
-            exit 0
           fi
 
-          B64=$(base64 -w0 ../../.github/scripts/drain-pvcs.sh.tpl)
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --timeout-seconds 600 \
-            --parameters "commands=[\"echo $B64 | base64 -d > /tmp/drain-pvcs.sh\", \"chmod +x /tmp/drain-pvcs.sh\", \"/tmp/drain-pvcs.sh\"]" \
-            --query "Command.CommandId" --output text)
-          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+      - name: Drain PVCs (release CSI-backed EBS volumes before teardown)
+        if: steps.instance.outputs.id != '' && steps.ssm_check.outputs.online == 'true'
+        id: drain
+        uses: ./.github/actions/ssm-run-script
+        with:
+          instance-id: ${{ steps.instance.outputs.id }}
+          script-path: .github/scripts/drain-pvcs.sh.tpl
+          timeout-seconds: "600"
+          max-poll-attempts: "55"
+          poll-interval-seconds: "10"
+          fail-on-error: "false"
 
-          for i in $(seq 1 55); do
-            ST=$(aws ssm get-command-invocation \
-              --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query "Status" --output text 2>/dev/null || echo "Pending")
-            case "$ST" in
-              Success) echo "PVC drain completed."; exit 0 ;;
-              Failed|Cancelled|TimedOut)
-                echo "::warning::PVC drain command ended with status $ST — some volumes may \
-                not have been released cleanly. Check the AWS Console for leftover volumes \
-                tagged ebs.csi.aws.com/cluster=true after this run."
-                exit 0 ;;
-              *) sleep 10 ;;
-            esac
-          done
-          echo "::warning::Timed out waiting for the PVC drain command to report a final status."
+      - name: Warn if drain did not complete cleanly
+        if: steps.drain.outputs.status != '' && steps.drain.outputs.status != 'Success'
+        run: |
+          echo "::warning::PVC drain command ended with status ${{ steps.drain.outputs.status }} — some volumes may \
+          not have been released cleanly. Check the AWS Console for leftover volumes \
+          tagged ebs.csi.aws.com/cluster=true after this run."
 
       - name: Show PVC drain output
         if: steps.drain.outputs.cmd_id != ''
