@@ -23,17 +23,24 @@ resource "aws_subnet" "public" {
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
-  tags = { Name = "${var.env}-public-subnet-${count.index + 1}" }
+  tags = {
+    Name                                        = "${var.env}-public-subnet-${count.index + 1}"
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+    "kubernetes.io/role/elb"                    = "1"
+  }
 }
 
-# ── Private subnets (EC2 nodes) ───────────────────────────────────────────────
 resource "aws_subnet" "private" {
   count             = length(var.private_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
-  tags = { Name = "${var.env}-private-subnet-${count.index + 1}" }
+  tags = {
+    Name                                        = "${var.env}-private-subnet-${count.index + 1}"
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+    "kubernetes.io/role/internal-elb"           = "1"
+  }
 }
 
 # ── NAT Gateway (AWS managed, single AZ) ─────────────────────────────────

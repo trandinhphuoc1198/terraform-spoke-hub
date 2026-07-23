@@ -24,35 +24,7 @@ master_volume_size = 20
 k8s_version = "1.33.2"
 pod_cidr    = "192.168.0.0/16"
 
-https_nodeport  = 30443
-certificate_arn = "arn:aws:acm:ap-northeast-1:633825695180:certificate/7cdd7b32-e304-4cee-989f-eb5b7cb08c34"
-
 bucket_names = [
   "tempo-s3-phuoctd6",
   "log-s3-phuoctd6"
 ]
-
-# NOTE: no "argocd" entry here anymore — Argo CD's UI/API is now served
-# from the hub's ALB (see live/hub/envs/dev/terraform.tfvars).
-apps = {
-  prometheus = {
-    host        = "prometheus.phuoctd6.shop"
-    health_path = "/alb-health"
-    priority    = 10
-  }
-  fastapi = {
-    host        = "fastapi.phuoctd6.shop"
-    health_path = "/alb-health"
-    priority    = 20
-  }
-  grafana = {
-    host        = "grafana.phuoctd6.shop"
-    health_path = "/alb-health"
-    priority    = 30
-  }
-  hubble = {
-    host        = "hubble.phuoctd6.shop"
-    health_path = "/alb-health"
-    priority    = 40
-  }
-}
