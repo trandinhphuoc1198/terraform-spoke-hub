@@ -92,6 +92,7 @@ jobs:
 
       - name: terraform plan
         env:
+          TF_IN_AUTOMATION: "true"
           TF_DESTROY_FLAG: ${{ inputs.destroy && '-destroy' || '' }}
           TF_VAR_FILE_FLAG: ${{ inputs.use_var_file && format('-var-file=envs/{0}/terraform.tfvars', inputs.environment) || '' }}
           TF_EXTRA_VARS: ${{ inputs.extra_tf_vars }}
@@ -99,12 +100,15 @@ jobs:
           args=()
           while IFS= read -r line; do
             [ -z "$line" ] && continue
-            args+=(-var "$line")
+            # Strip leading -var= or quotes if present
+            clean_line=$(echo "$line" | sed -E 's/^-var=["'\'']?//; s/["'\'']?$//')
+            args+=(-var "$clean_line")
           done <<< "$TF_EXTRA_VARS"
-          terraform plan $TF_DESTROY_FLAG $TF_VAR_FILE_FLAG "${args[@]}" -out=tfplan
+
+          terraform plan -input=false $TF_DESTROY_FLAG $TF_VAR_FILE_FLAG "${args[@]}" -out=tfplan
 
       - name: terraform apply
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -input=false -auto-approve tfplan
 
       - name: Capture terraform output
         id: capture_output
