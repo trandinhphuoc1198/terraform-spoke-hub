@@ -11,19 +11,13 @@ name: terraform-apply
 #   - `use_var_file` toggles whether `-var-file=envs/<environment>/terraform.tfvars`
 #                     is passed (global/network doesn't have one; live/hub
 #                     and live/spoke do).
-#   - `extra_tf_vars` is a multiline string of additional `key=value` pairs
-#                     (ONE PER LINE, no `-var=` prefix, no surrounding quotes).
-#                     Each line is passed to terraform as a separate `-var`
-#                     argument, so values containing spaces/quotes are safe.
-#                     Example:
-#                       extra_tf_vars: |
-#                         env_prefix=dev
-#                         network_state_key=live/hub/terraform.tfstate
+#   - `extra_tf_vars` is a raw string of additional `-var="key=value"` flags
+#                     for whatever a given root still needs on top of that
+#                     (env_prefix for network, network_state_key for hub/spoke).
 #   - `terraform_output_name`, if set, captures `terraform output -raw <name>`
 #                     after apply and exposes it as this workflow's own
 #                     `terraform_output_value` output (used by
 #                     deploy-spoke-infra.yml to grab `cluster_name`).
-#                     Ignored when `destroy: true`.
 
 on:
   workflow_call:
@@ -45,11 +39,11 @@ on:
         type: boolean
         default: true
       extra_tf_vars:
-        description: 'Extra terraform vars as a multiline string, one "key=value" per line (no -var= prefix, no quotes). Each line becomes a separate -var argument.'
+        description: 'Extra raw -var="key=value" arguments to append to the plan command'
         type: string
         default: ""
       terraform_output_name:
-        description: "If set (and destroy is false), captures `terraform output -raw <name>` after apply and exposes it as terraform_output_value"
+        description: "If set, captures `terraform output -raw <name>` after apply and exposes it as terraform_output_value"
         type: string
         default: ""
       aws_region:
@@ -63,19 +57,12 @@ on:
         required: true
     outputs:
       terraform_output_value:
-        description: "Value of `terraform output -raw <terraform_output_name>`, if terraform_output_name was set and destroy was false"
+        description: "Value of `terraform output -raw <terraform_output_name>`, if terraform_output_name was set"
         value: ${{ jobs.terraform.outputs.terraform_output_value }}
 
 permissions:
   id-token: write
   contents: read
-
-# Serialize runs against the same root+environment so we never race on the
-# remote state lock. Different roots (network/hub/spoke) or different envs
-# (dev/prod) can still run in parallel.
-concurrency:
-  group: tf-${{ inputs.working_directory }}-${{ inputs.environment }}
-  cancel-in-progress: false
 
 jobs:
   terraform:
@@ -85,9 +72,6 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working_directory }}
-    env:
-      TF_IN_AUTOMATION: "true"
-      TF_INPUT: "0"
     outputs:
       terraform_output_value: ${{ steps.capture_output.outputs.value }}
     steps:
@@ -104,7 +88,7 @@ jobs:
           terraform_version: ${{ inputs.tf_version }}
 
       - name: terraform init
-        run: terraform init -input=false -backend-config="envs/${{ inputs.environment }}/backend.hcl"
+        run: terraform init -backend-config="envs/${{ inputs.environment }}/backend.hcl"
 
       - name: terraform plan
         env:
@@ -112,48 +96,17 @@ jobs:
           TF_VAR_FILE_FLAG: ${{ inputs.use_var_file && format('-var-file=envs/{0}/terraform.tfvars', inputs.environment) || '' }}
           TF_EXTRA_VARS: ${{ inputs.extra_tf_vars }}
         run: |
-          set -euo pipefail
-
-          # Build -var arguments safely from the multiline `extra_tf_vars` input.
-          # Each non-empty line is passed as its own `-var key=value` pair, so
-          # values containing spaces or quotes survive without shell mangling.
-          extra_args=()
-          if [ -n "${TF_EXTRA_VARS}" ]; then
-            while IFS= read -r line; do
-              # Trim leading/trailing whitespace
-              line="${line#"${line%%[![:space:]]*}"}"
-              line="${line%"${line##*[![:space:]]}"}"
-              # Skip blank lines and comments
-              [ -z "$line" ] && continue
-              case "$line" in \#*) continue ;; esac
-              extra_args+=(-var "$line")
-            done <<< "${TF_EXTRA_VARS}"
-          fi
-
-          echo "terraform plan ${TF_DESTROY_FLAG} ${TF_VAR_FILE_FLAG} ${extra_args[*]:-} -out=tfplan"
-          terraform plan \
-            -input=false \
-            ${TF_DESTROY_FLAG} \
-            ${TF_VAR_FILE_FLAG} \
-            "${extra_args[@]}" \
-            -out=tfplan
+          args=()
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            args+=(-var "$line")
+          done <<< "$TF_EXTRA_VARS"
+          terraform plan $TF_DESTROY_FLAG $TF_VAR_FILE_FLAG "${args[@]}" -out=tfplan
 
       - name: terraform apply
-        run: terraform apply -input=false -auto-approve tfplan
+        run: terraform apply -auto-approve tfplan
 
       - name: Capture terraform output
         id: capture_output
-        if: inputs.terraform_output_name != '' && inputs.destroy == false
-        run: |
-          set -euo pipefail
-          name="${{ inputs.terraform_output_name }}"
-          if ! value="$(terraform output -raw "$name")"; then
-            echo "::error::terraform output -raw $name failed. Does the root actually declare an output named '$name'?"
-            exit 1
-          fi
-          # Support multi-line output values safely in $GITHUB_OUTPUT
-          {
-            echo "value<<__EOF__"
-            echo "$value"
-            echo "__EOF__"
-          } >> "$GITHUB_OUTPUT"
+        if: inputs.terraform_output_name != ''
+        run: echo "value=$(terraform output -raw ${{ inputs.terraform_output_name }})" >> "$GITHUB_OUTPUT"
