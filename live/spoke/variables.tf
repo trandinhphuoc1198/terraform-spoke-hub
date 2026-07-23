@@ -114,27 +114,6 @@ variable "pod_cidr" {
   default     = "192.168.0.0/16"
 }
 
-# ── ALB / Ingress ─────────────────────────────────────────────────────────────
-variable "https_nodeport" {
-  description = "Kubernetes HTTPS NodePort the ALB target groups forward to (for NGINX Ingress)"
-  type        = number
-  default     = 30443
-}
-
-variable "apps" {
-  description = "Map of applications exposed through this spoke's ALB; each must have host, health_path, and priority keys"
-  type = map(object({
-    host        = string
-    health_path = string
-    priority    = number
-  }))
-}
-
-variable "certificate_arn" {
-  description = "ARN of the ACM certificate used by the ALB's HTTPS listener"
-  type        = string
-}
-
 # ── S3 ────────────────────────────────────────────────────────────────────────
 variable "bucket_names" {
   description = "Base names for S3 buckets provisioned for this cluster's workloads; each is suffixed with -<env>"

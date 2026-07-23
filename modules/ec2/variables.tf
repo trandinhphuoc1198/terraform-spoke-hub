@@ -4,7 +4,6 @@ variable "vpc_cidr" { type = string }
 variable "private_subnet_ids" { type = list(string) }
 variable "master_instance_type" { type = string }
 variable "key_name" { type = string }
-variable "alb_sg_id" { type = string }
 variable "cluster_name" { type = string }
 variable "master_private_ip" {
   type    = string

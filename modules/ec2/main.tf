@@ -44,7 +44,10 @@ resource "aws_security_group" "worker" {
     ignore_changes = [ingress, egress]
   }
 
-  tags = { Name = "${var.env}-k8s-worker-sg" }
+  tags = {
+    Name                                        = "${var.env}-k8s-worker-sg"
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+  }
 }
 
 # ── Master rules ───────────────────────────────────────────────────────────────
@@ -120,17 +123,6 @@ resource "aws_vpc_security_group_ingress_rule" "worker_ingress_self" {
   ip_protocol                  = "-1"
 
   tags = { Name = "${var.env}-worker-ingress-self" }
-}
-
-resource "aws_vpc_security_group_ingress_rule" "worker_ingress_nodeport" {
-  description                  = "NodePort range from ALB"
-  security_group_id            = aws_security_group.worker.id
-  referenced_security_group_id = var.alb_sg_id
-  from_port                    = 30000
-  to_port                      = 32767
-  ip_protocol                  = "tcp"
-
-  tags = { Name = "${var.env}-worker-ingress-nodeport" }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "worker_ingress_ssh" {
@@ -253,6 +245,49 @@ resource "aws_iam_role_policy" "master_ccm_policy" {
             "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
           }
         }
+      },
+      {
+        # ELB resource-level/tag-conditioned IAM isn't consistently supported
+        # across Classic ELB vs ALB/NLB APIs, so unlike the EC2 statements
+        # above this stays Resource = "*" — matches AWS's own documented
+        # IAM policy for cloud-provider-aws.
+        Sid    = "ELBManageForCCMProvisionedLoadBalancers"
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:CreateLoadBalancer",
+          "elasticloadbalancing:DeleteLoadBalancer",
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeLoadBalancerAttributes",
+          "elasticloadbalancing:ModifyLoadBalancerAttributes",
+          "elasticloadbalancing:CreateListener",
+          "elasticloadbalancing:DeleteListener",
+          "elasticloadbalancing:DescribeListeners",
+          "elasticloadbalancing:ModifyListener",
+          "elasticloadbalancing:CreateTargetGroup",
+          "elasticloadbalancing:DeleteTargetGroup",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeTargetGroupAttributes",
+          "elasticloadbalancing:ModifyTargetGroup",
+          "elasticloadbalancing:ModifyTargetGroupAttributes",
+          "elasticloadbalancing:RegisterTargets",
+          "elasticloadbalancing:DeregisterTargets",
+          "elasticloadbalancing:DescribeTargetHealth",
+          "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+          "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+          "elasticloadbalancing:CreateLoadBalancerListeners",
+          "elasticloadbalancing:DeleteLoadBalancerListeners",
+          "elasticloadbalancing:ConfigureHealthCheck",
+          "elasticloadbalancing:AttachLoadBalancerToSubnets",
+          "elasticloadbalancing:DetachLoadBalancerFromSubnets",
+          "elasticloadbalancing:ApplySecurityGroupsToLoadBalancer",
+          "elasticloadbalancing:SetLoadBalancerPoliciesOfListener",
+          "elasticloadbalancing:CreateLoadBalancerPolicy",
+          "elasticloadbalancing:AddTags",
+          "elasticloadbalancing:RemoveTags",
+          "elasticloadbalancing:DescribeTags",
+          "ec2:DescribeVpcs"
+        ]
+        Resource = "*"
       }
     ]
   })

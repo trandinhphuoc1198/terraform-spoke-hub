@@ -1,8 +1,3 @@
-output "argocd_url" {
-  description = "Public DNS of the hub ALB — point argocd.<domain> here"
-  value       = module.alb.alb_dns_name
-}
-
 output "master_instance_id" {
   description = "aws ssm start-session --target <this> to grab the hub kubeconfig / check bootstrap logs (master has no public IP)"
   value       = module.ec2.master_instance_id

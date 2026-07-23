@@ -26,14 +26,3 @@ master_volume_size = 20
 
 k8s_version = "1.33.2"
 pod_cidr    = "192.168.0.0/16"
-
-https_nodeport  = 30443
-certificate_arn = "arn:aws:acm:ap-northeast-1:633825695180:certificate/7cdd7b32-e304-4cee-989f-eb5b7cb08c34"
-
-apps = {
-  argocd = {
-    host        = "argocd.phuoctd6.shop"
-    health_path = "/alb-health"
-    priority    = 10
-  }
-}

@@ -1,8 +1,4 @@
 # ── CIDR overlap guard ─────────────────────────────────────────────────────
-# Terraform has no built-in "do these CIDRs overlap" function, so this
-# converts each CIDR to a numeric [start, end] range and compares pairs.
-# Runs at plan time — catches the classic "copy-pasted the same /16 twice"
-# mistake before it fails deep inside a TGW route apply.
 locals {
   all_cidrs = concat([var.vpc_cidr], var.spoke_vpc_cidrs)
 
@@ -34,9 +30,6 @@ check "no_cidr_overlap" {
 
 check "no_duplicate_cidrs" {
   assert {
-    # local.cidr_ranges is keyed by CIDR string, so an exact duplicate
-    # collapses into one map entry and would otherwise hide itself from
-    # the pairwise overlap check above.
     condition     = length(local.cidr_ranges) == length(concat([var.vpc_cidr], var.spoke_vpc_cidrs))
     error_message = "vpc_cidr and spoke_vpc_cidrs contain an exact duplicate CIDR — each cluster needs a distinct VPC CIDR."
   }
@@ -50,13 +43,10 @@ module "vpc" {
   public_subnet_cidrs  = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
   region               = var.region
-  # Tags the private route table for AWS CCM's route controller to
-  # discover (Cilium native routing) — see modules/vpc/main.tf.
-  cluster_name = var.cluster_name
+  cluster_name         = var.cluster_name
 }
 
 # ── Baked k8s base AMI (built by Packer + Ansible — see /packer) ─────────────
-# Shared by both the master (module.ec2) and workers (module.asg) below.
 module "ami" {
   source = "../../modules/ami"
 }
@@ -72,8 +62,7 @@ module "tgw_attachment" {
   peer_cidr_blocks      = var.spoke_vpc_cidrs
 }
 
-# ── K8s bootstrap scripts (kubeadm init + CNI only — CCM/ArgoCD/ESO moved
-# to CI-driven bootstrap steps; see modules/k8s/variables.tf note) ───────────
+# ── K8s bootstrap scripts (kubeadm init + CNI only) ───────────────────────
 module "k8s" {
   source      = "../../modules/k8s"
   k8s_version = var.k8s_version
@@ -92,7 +81,6 @@ module "ec2" {
   key_name             = var.key_name
   master_private_ip    = var.master_private_ip
   master_volume_size   = var.master_volume_size
-  alb_sg_id            = module.alb.alb_sg_id
   cluster_name         = var.cluster_name
   ami_id               = module.ami.ami_id
   install_eso          = true
@@ -116,20 +104,6 @@ module "asg" {
   ami_id                           = module.ami.ami_id
 
   depends_on = [module.vpc]
-}
-
-# ── ALB — just fronts Argo CD's UI/API for this cluster ───────────────────────
-module "alb" {
-  source            = "../../modules/alb"
-  env               = var.env
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
-  https_nodeport    = var.https_nodeport
-  asg_name          = module.asg.asg_name
-  certificate_arn   = var.certificate_arn
-  apps              = var.apps
-  worker_sg_id      = module.ec2.worker_sg_id
-
 }
 
 # ── IAM role assumed by the verify-spoke-registration.yml GitHub Actions workflow ─

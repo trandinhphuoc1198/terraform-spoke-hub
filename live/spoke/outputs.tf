@@ -1,8 +1,3 @@
-output "alb_dns_name" {
-  description = "Public DNS of this spoke's ALB — app traffic (not Argo CD) goes here"
-  value       = module.alb.alb_dns_name
-}
-
 output "master_instance_id" {
   description = "aws ssm start-session --target <this> to grab the spoke kubeconfig / check bootstrap logs (master has no public IP)"
   value       = module.ec2.master_instance_id
