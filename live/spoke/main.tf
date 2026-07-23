@@ -1,5 +1,4 @@
 # ── CIDR overlap guard ─────────────────────────────────────────────────────
-# See live/hub/main.tf for why this exists — same logic, mirrored here.
 locals {
   cidr_ranges = {
     for c in [var.vpc_cidr, var.hub_vpc_cidr] : c => {
@@ -27,14 +26,10 @@ module "vpc" {
   public_subnet_cidrs  = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
   region               = var.region
-  # Tags the private route table for AWS CCM's route controller to
-  # discover (Cilium native routing) — see modules/vpc/main.tf.
-  cluster_name = var.cluster_name
+  cluster_name         = var.cluster_name
 }
 
-
 # ── Baked k8s base AMI (built by Packer + Ansible — see /packer) ─────────────
-# Shared by both the master (module.ec2) and workers (module.asg) below.
 module "ami" {
   source = "../../modules/ami"
 }
@@ -69,7 +64,6 @@ module "ec2" {
   key_name                = var.key_name
   master_private_ip       = var.master_private_ip
   master_volume_size      = var.master_volume_size
-  alb_sg_id               = module.alb.alb_sg_id
   cluster_name            = var.cluster_name
   ami_id                  = module.ami.ami_id
   trusted_api_cidr_blocks = [var.hub_vpc_cidr]
@@ -95,20 +89,6 @@ module "asg" {
   ami_id                           = module.ami.ami_id
 
   depends_on = [module.vpc]
-}
-
-# ── ALB — app workloads (NOT Argo CD — that's on the hub's ALB now) ──────────
-module "alb" {
-  source            = "../../modules/alb"
-  env               = var.env
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
-  https_nodeport    = var.https_nodeport
-  asg_name          = module.asg.asg_name
-  certificate_arn   = var.certificate_arn
-  apps              = var.apps
-  worker_sg_id      = module.ec2.worker_sg_id
-
 }
 
 # ── S3 Buckets ─────────────────────────────────────────────────────────────────
