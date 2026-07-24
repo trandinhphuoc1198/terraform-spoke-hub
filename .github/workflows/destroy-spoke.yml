@@ -77,11 +77,11 @@ jobs:
 
   # ── Phase 2: drain remaining PVCs (release CSI-backed EBS volumes) ───────
   drain-spoke:
-    name: "drain spoke PVCs (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
+    name: "drain spoke cluster (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
     needs: deregister-from-argocd
-    uses: ./.github/workflows/drain-spoke-pvcs.yml
+    uses: ./.github/workflows/drain-cluster.yml
     with:
-      spoke_dir: ${{ inputs.spoke_dir }}
+      working_directory: ${{ inputs.spoke_dir }}
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
     secrets:

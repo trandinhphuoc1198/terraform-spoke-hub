@@ -42,6 +42,7 @@ CLUSTER_NAME="__CLUSTER_NAME__"
 EXCLUDED_RELEASES=(
   "cilium"
   "aws-ebs-csi-driver"
+  "aws-cloud-controller-manager"
 )
 
 echo "=== Deregistering cluster: $CLUSTER_NAME ==="

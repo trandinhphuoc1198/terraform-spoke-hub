@@ -48,9 +48,10 @@ permissions:
 jobs:
   # ── Phase 1: drain PVCs so the CSI driver releases their EBS volumes ─────
   drain-hub:
-    name: "drain hub PVCs (${{ inputs.environment }})"
-    uses: ./.github/workflows/drain-hub-pvcs.yml
+    name: "drain hub cluster (${{ inputs.environment }})"
+    uses: ./.github/workflows/drain-cluster.yml
     with:
+      working_directory: live/hub
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
     secrets:
