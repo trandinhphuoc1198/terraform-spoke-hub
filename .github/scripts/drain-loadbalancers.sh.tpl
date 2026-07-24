@@ -46,7 +46,7 @@ if [ -n "$LB_SVCS" ]; then
   for svc in $LB_SVCS; do
     ns="${svc%%/*}"; name="${svc##*/}"
     echo "Deleting svc/$name -n $ns (triggers CCM's ELBv2 DeleteLoadBalancer)..."
-    kubectl delete svc "$name" -n "$ns" --wait=false || true
+    kubectl delete svc "$name" -n "$ns" --wait=true || true
   done
 else
   echo "No LoadBalancer Services found in-cluster — checking AWS directly in case one was already deleted (e.g. via a namespace cascade) and may still be mid-teardown."
