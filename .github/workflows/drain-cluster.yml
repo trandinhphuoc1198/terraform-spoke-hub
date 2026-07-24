@@ -35,6 +35,10 @@ on:
       aws_region:
         type: string
         required: true
+      freeze_argocd_namespace:
+       description: If set, scales argocd-application-controller and argocd-applicationset-controller to 0 replicas on THIS cluster
+       type: string
+       default: ""
     secrets:
       AWS_DEPLOY_ROLE_ARN:
         required: true
@@ -99,6 +103,32 @@ jobs:
             CSI-backed EBS volumes and CCM-provisioned load balancers may be orphaned. \
             Check the AWS Console after this run and delete manually if needed."
           fi
+
+      # ── Freeze local ArgoCD (only set by callers whose cluster runs
+      #    ArgoCD itself — currently only live/hub) ──────────────────────
+      - name: Render ArgoCD freeze script
+        if: steps.instance.outputs.id != '' && steps.ssm_check.outputs.online == 'true' && inputs.freeze_argocd_namespace != ''
+        run: |
+          sed "s|__ARGOCD_NAMESPACE__|${{ inputs.freeze_argocd_namespace }}|g" \
+            ../../.github/scripts/freeze-argocd.sh.tpl > /tmp/freeze-argocd.sh
+
+      - name: Freeze local ArgoCD controllers (stop selfHeal before draining this cluster's own workloads)
+        if: steps.instance.outputs.id != '' && steps.ssm_check.outputs.online == 'true' && inputs.freeze_argocd_namespace != ''
+        id: freeze_argocd
+        uses: ./.github/actions/ssm-run-script
+        with:
+          instance-id: ${{ steps.instance.outputs.id }}
+          script-path: /tmp/freeze-argocd.sh
+          timeout-seconds: "180"
+          max-poll-attempts: "20"
+          poll-interval-seconds: "5"
+          fail-on-error: "false"
+
+      - name: Warn if ArgoCD freeze did not complete cleanly
+        if: steps.freeze_argocd.outputs.status != '' && steps.freeze_argocd.outputs.status != 'Success'
+        run: |
+          echo "::warning::ArgoCD freeze command ended with status ${{ steps.freeze_argocd.outputs.status }} — \
+          selfHeal may still be active during this drain, risking a recreate race against deleted namespaces/Services."
 
       # ── LoadBalancer (NLB/ALB) drain ──────────────────────────────────
       - name: Render load balancer drain script
