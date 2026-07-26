@@ -9,15 +9,31 @@
 # rather than proceed.
 #
 # Order matters and is deliberate:
-#   1. Delete the ExternalSecret (+ its generated Secret) FIRST. The
-#      ExternalSecret reconciles on its own refreshInterval (5m) via ESO,
-#      completely independent of ArgoCD's selfHeal setting - deleting only
-#      the generated Secret without this would let ESO resurrect the
-#      cluster registration within minutes, undoing everything below.
+#   0. Remove ArgoCD's OWN control over cluster registration first:
+#      delete the `root-clusters` Application with --cascade=orphan. This
+#      is what actually stops the resurrection race - `root-clusters`
+#      watches argocd/clusters/*.yaml in git and reconciles the
+#      ExternalSecret for EVERY registered cluster (selfHeal: true), so as
+#      long as it's alive it will recreate whatever we delete in step 1
+#      within its own reconcile loop (observed as fast as immediately, not
+#      on ESO's 5m refreshInterval - ESO isn't the thing recreating it,
+#      ArgoCD is). --cascade=orphan removes only the Application object,
+#      NOT the resources it created - so every OTHER spoke's ExternalSecret/
+#      Secret (still managed the same way) is left alone and keeps working
+#      via ESO's own controller, just without ArgoCD drift-correction on it
+#      until root-clusters is re-applied. This script deliberately does NOT
+#      re-apply root-clusters itself - see the destroy-spoke.yml workflow
+#      for that, added as a step AFTER terraform-destroy-spoke, only when
+#      the hub is expected to survive this teardown. Re-applying it here
+#      would just race the drain step that runs immediately after this
+#      script.
+#   1. Delete the ExternalSecret (+ its generated Secret) for THIS cluster
+#      only. With root-clusters gone, nothing can regenerate it anymore.
 #   2. Only once the cluster is gone from ArgoCD's inventory do we delete
 #      the generated Applications - otherwise every spokes/ ApplicationSet
 #      (selfHeal: true) can regenerate an Application faster than this
-#      script deletes the previous one.
+#      script deletes the previous one. (These ApplicationSets are separate
+#      from root-clusters and are untouched by step 0.)
 #   3. Applications are deleted in REVERSE sync-wave order, discovered
 #      dynamically from each Application's own
 #      argocd.argoproj.io/sync-wave annotation (every spokes/ ApplicationSet
@@ -49,9 +65,40 @@ echo "=== Deregistering cluster: $CLUSTER_NAME ==="
 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required." >&2; exit 1; }
 
+# ── Step 0: stop root-clusters from being able to resurrect anything ───────
+# --cascade=orphan: removes the Application object only. Everything it
+# created (every spoke's ExternalSecret/Secret, including ones we are NOT
+# touching right now) is left in place and keeps functioning independently
+# via the external-secrets-operator controller - it just stops being
+# drift-corrected by ArgoCD until root-clusters is re-applied.
+echo "--- Removing root-clusters Application (cascade=orphan) so nothing can resurrect the ExternalSecret ---"
+if kubectl get application root-clusters -n argocd >/dev/null 2>&1; then
+  kubectl delete application root-clusters -n argocd --cascade=orphan --wait=true --timeout=60s || {
+    echo "ERROR: failed to delete application/root-clusters." >&2
+    exit 1
+  }
+
+  echo "--- Verifying root-clusters Application is actually gone ---"
+  for i in $(seq 1 12); do
+    if ! kubectl get application root-clusters -n argocd >/dev/null 2>&1; then
+      echo "Confirmed: root-clusters Application removed - nothing can regenerate cluster ExternalSecrets now."
+      break
+    fi
+    if [ "$i" -eq 12 ]; then
+      echo "ERROR: root-clusters Application still present after 60s." >&2
+      exit 1
+    fi
+    sleep 5
+  done
+else
+  echo "root-clusters Application not found - already removed (e.g. a previous run got this far). Continuing."
+fi
+
 # ── Step 1: delete the ExternalSecret (and its generated Secret) ───────────
-# This is what actually stops re-registration. Deleting only the generated
-# Secret is not enough - ESO's refreshInterval would just recreate it.
+# Safe now - with root-clusters gone, nothing reconciles this manifest back
+# from git. ESO's own refreshInterval only re-syncs an EXISTING
+# ExternalSecret's value from Secrets Manager; it does not recreate a
+# deleted ExternalSecret object, so this deletion sticks.
 echo "--- Deleting ExternalSecret + generated Secret ---"
 EXTSECRET_NAME=$(kubectl get externalsecret -n argocd -o json 2>/dev/null \
   | jq -r --arg cn "$CLUSTER_NAME" '.items[] | select(.spec.dataFrom[]?.extract.key // "" | test($cn)) | .metadata.name' \
@@ -147,6 +194,11 @@ if [ -n "$UNEXPECTED" ]; then
 fi
 
 echo "=== Deregistration complete: $CLUSTER_NAME is no longer tracked by ArgoCD ==="
+echo "root-clusters Application was removed (cascade=orphan) to stop it recreating this cluster's ExternalSecret."
+echo "If the hub survives this teardown and other spokes remain registered, re-apply it manually or via a"
+echo "follow-up workflow step once this spoke's terraform destroy has finished:"
+echo "  kubectl apply -f \$GITOPS_REPO_RAW_URL/argocd/root-apps/root-clusters.yaml"
+echo
 echo "Excluded and left running on purpose (delete these AFTER drain-pvcs.sh):"
 for release in "${EXCLUDED_RELEASES[@]}"; do
   app="${release}-${CLUSTER_NAME}"
