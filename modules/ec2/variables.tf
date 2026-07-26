@@ -55,3 +55,21 @@ variable "master_volume_size" {
   type        = number
   default     = 20
 }
+
+variable "pod_cidr_supernet" {
+  description = "Fleet-wide pod-CIDR supernet (default 100.64.0.0/10 — see README). Allowed as an ingress source on master/worker SGs so Cilium Cluster Mesh native-routed pod traffic from any other cluster isn't dropped at the node ENI."
+  type        = string
+  default     = "100.64.0.0/10"
+}
+
+variable "vpc_cidr_supernet" {
+  description = "Fleet-wide VPC-CIDR supernet (default 10.0.0.0/8). Allowed as an ingress source on the worker SG for the clustermesh-apiserver NodePort, since cilium-agent connects using its node's real VPC IP (hostNetwork), not a pod IP."
+  type        = string
+  default     = "10.0.0.0/8"
+}
+
+variable "clustermesh_nodeport" {
+  description = "NodePort the clustermesh-apiserver Service listens on — exposed to every other cluster in the fleet for Cilium Cluster Mesh"
+  type        = number
+  default     = 32379
+}

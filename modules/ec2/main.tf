@@ -145,6 +145,46 @@ resource "aws_vpc_security_group_egress_rule" "worker_egress_all" {
   tags = { Name = "${var.env}-worker-egress-all" }
 }
 
+# ── Cluster Mesh: pod-to-pod traffic from any other cluster in the fleet ─────
+# Native-routing pod traffic terminates at the destination node's ENI (that's
+# what the TGW pod-CIDR-supernet route in modules/tgw-attachment points it
+# at), so the SG must explicitly allow it in. CIDR-based, not SG-referenced —
+# the peer's SG lives in a different VPC/account and can't be referenced
+# directly. Scoped to the fleet supernet, not per-peer, so adding a spoke
+# never requires touching this rule.
+resource "aws_vpc_security_group_ingress_rule" "worker_ingress_clustermesh_pods" {
+  description       = "Cross-cluster pod traffic (Cilium Cluster Mesh, native routing)"
+  security_group_id = aws_security_group.worker.id
+  cidr_ipv4         = var.pod_cidr_supernet
+  ip_protocol       = "-1"
+
+  tags = { Name = "${var.env}-worker-ingress-clustermesh-pods" }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "master_ingress_clustermesh_pods" {
+  description       = "Cross-cluster pod traffic (Cilium Cluster Mesh, native routing) — master isn't cordoned, it runs pods too"
+  security_group_id = aws_security_group.master.id
+  cidr_ipv4         = var.pod_cidr_supernet
+  ip_protocol       = "-1"
+
+  tags = { Name = "${var.env}-master-ingress-clustermesh-pods" }
+}
+
+# ── Cluster Mesh: clustermesh-apiserver NodePort from any other cluster ──────
+# cilium-agent on a peer cluster connects with its node's real VPC IP
+# (hostNetwork), not a pod IP — scoped to the VPC-CIDR supernet, not the
+# pod-CIDR supernet above.
+resource "aws_vpc_security_group_ingress_rule" "worker_ingress_clustermesh_apiserver" {
+  description       = "clustermesh-apiserver NodePort, reachable from every cluster in the fleet"
+  security_group_id = aws_security_group.worker.id
+  cidr_ipv4         = var.vpc_cidr_supernet
+  from_port         = var.clustermesh_nodeport
+  to_port           = var.clustermesh_nodeport
+  ip_protocol       = "tcp"
+
+  tags = { Name = "${var.env}-worker-ingress-clustermesh-apiserver" }
+}
+
 # ── IAM role: master ───────────────────────────────────────────────────────────
 resource "aws_iam_role" "master" {
   name = "${var.env}-k8s-master-role"

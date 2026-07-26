@@ -115,3 +115,21 @@ variable "pod_cidr" {
   type        = string
   default     = "192.168.0.0/16"
 }
+
+variable "pod_cidr_supernet" {
+  description = "Fleet-wide pod-CIDR supernet — var.pod_cidr must fall inside this range for Cilium Cluster Mesh routing to work (see README)"
+  type        = string
+  default     = "100.64.0.0/10"
+}
+
+variable "vpc_cidr_supernet" {
+  description = "Fleet-wide VPC-CIDR supernet — lets the clustermesh-apiserver NodePort SG rule admit traffic from any cluster without per-peer rules"
+  type        = string
+  default     = "10.0.0.0/8"
+}
+
+variable "clustermesh_nodeport" {
+  description = "NodePort the clustermesh-apiserver Service listens on"
+  type        = number
+  default     = 32379
+}

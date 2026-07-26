@@ -99,7 +99,7 @@ for i in $(seq 1 5); do
   --set k8sServiceHost="$PRIVATE_IP" \
   --set k8sServicePort="6443" \
   --set routingMode=native \
-  --set ipv4NativeRoutingCIDR="${pod_cidr}" \
+  --set ipv4NativeRoutingCIDR="${pod_cidr_supernet}" \
   --set autoDirectNodeRoutes=false \
   --set ipam.mode=kubernetes \
   --set ipam.operator.clusterPoolIPv4PodCIDRList="${pod_cidr}" \

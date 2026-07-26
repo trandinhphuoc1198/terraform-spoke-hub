@@ -13,9 +13,8 @@ variable "env" {
   description = "The target deployment environment/cluster name (e.g. hub-dev, spoke-dev)"
 }
 
-# NOTE: install_argocd, argocd_namespace, argocd_chart_version, install_eso,
-# register_with_hub, cluster_name, and gitops_repo_raw_url were removed here.
-# This module's only job now is "produce a script that gets kubeadm to a
-# Ready node with CNI." Argo CD/CCM/ESO installation and hub registration
-# move to CI-driven bootstrap steps (see .github/workflows/) and, later,
-# Argo CD Applications in the gitops repo.
+variable "pod_cidr_supernet" {
+  description = "Fleet-wide pod-CIDR supernet (see README). Sets Cilium's ipv4NativeRoutingCIDR so cross-cluster Cluster Mesh pod traffic isn't masqueraded — must stay wider than just this cluster's own pod_cidr."
+  type        = string
+  default     = "100.64.0.0/10"
+}

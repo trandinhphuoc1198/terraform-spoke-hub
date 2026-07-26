@@ -25,4 +25,4 @@ worker_volume_size = 20
 master_volume_size = 20
 
 k8s_version = "1.33.2"
-pod_cidr    = "192.168.0.0/16"
+pod_cidr    = "100.64.0.0/16"
