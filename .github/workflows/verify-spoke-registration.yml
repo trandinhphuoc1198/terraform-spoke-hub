@@ -2,7 +2,7 @@ name: verify-spoke-registration
 
 # Terraform/CI's job stops at pushing {name, role, server, token, caData} to
 # Secrets Manager (see k8s-register-with-hub.yml / register-with-hub.sh.tpl)
-# — that's the one thing only CI can produce. Registering the cluster with
+# - that's the one thing only CI can produce. Registering the cluster with
 # ArgoCD is a GitOps fact: add argocd/clusters/<name>.yaml to the gitops
 # repo once (copy an existing spoke file, rename) and ESO + root-clusters
 # do the rest, no CI step needed on every deploy.
@@ -24,11 +24,11 @@ on:
         required: true
         default: "hub-dev"
       cluster_role:
-        description: "Informational only now — surfaced in the timeout error message. Verification itself filters by cluster-name, not cluster-role."
+        description: "Informational only now - surfaced in the timeout error message. Verification itself filters by cluster-name, not cluster-role."
         required: false
         default: "workload"
       cluster_env:
-        description: "Optional — informational only, surfaced in the timeout error message"
+        description: "Optional - informational only, surfaced in the timeout error message"
         required: false
         default: ""
       timeout_minutes:
@@ -87,12 +87,12 @@ jobs:
           fi
           echo "id=$ID" >> "$GITHUB_OUTPUT"
 
-      # Polls instead of applying anything — the ExternalSecret is git-owned
+      # Polls instead of applying anything - the ExternalSecret is git-owned
       # (argocd/clusters/<name>.yaml) and ESO/root-clusters materialize the
       # cluster Secret on their own schedule. This just confirms it happened.
       #
       # Filters directly on the cluster-name label, which the ExternalSecret
-      # now templates from the pushed secret's own "name" field — no more
+      # now templates from the pushed secret's own "name" field - no more
       # role-list + grep round trip.
       - name: Wait for ESO to materialize the cluster registration Secret
         run: |

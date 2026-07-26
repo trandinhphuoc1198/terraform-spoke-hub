@@ -35,7 +35,7 @@ elif kubectl get statefulset argocd-application-controller -n "$ARGOCD_NAMESPACE
 fi
 
 if [ "$FROZE_ANY" = false ]; then
-  echo "WARNING: No argocd-application-controller or argocd-applicationset-controller workload found in ${ARGOCD_NAMESPACE} — nothing to freeze."
+  echo "WARNING: No argocd-application-controller or argocd-applicationset-controller workload found in ${ARGOCD_NAMESPACE} - nothing to freeze."
   exit 0
 fi
 
@@ -46,9 +46,9 @@ if kubectl wait --for=delete pod \
   -l 'app.kubernetes.io/name in (argocd-application-controller, argocd-applicationset-controller)' \
   -n "$ARGOCD_NAMESPACE" \
   --timeout=90s 2>/dev/null; then
-  echo "ArgoCD controllers are fully scaled down — selfHeal can no longer race this drain."
+  echo "ArgoCD controllers are fully scaled down - selfHeal can no longer race this drain."
   exit 0
 else
-  echo "WARNING: Controller pod(s) still present after 90s — selfHeal may still be active. Proceeding with drain anyway (best-effort)."
+  echo "WARNING: Controller pod(s) still present after 90s - selfHeal may still be active. Proceeding with drain anyway (best-effort)."
   exit 0
 fi

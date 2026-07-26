@@ -1,5 +1,5 @@
 output "certificate_arn" {
-  description = "ARN of the issued ACM certificate — passed to the ALB HTTPS listener"
+  description = "ARN of the issued ACM certificate - passed to the ALB HTTPS listener"
   value       = aws_acm_certificate.this.arn
 }
 

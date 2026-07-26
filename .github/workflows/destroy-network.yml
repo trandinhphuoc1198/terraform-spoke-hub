@@ -41,7 +41,7 @@ jobs:
     name: "destroy network (${{ inputs.environment }})"
     # Deployment protection rules (required reviewers, etc.) for dev/prod
     # are applied inside terraform-apply.yml's own job, which does set
-    # environment: — GitHub doesn't support `environment:` on a job that
+    # environment: - GitHub doesn't support `environment:` on a job that
     # just calls a reusable workflow (uses:), only on a real job with
     # runs-on.
     uses: ./.github/workflows/terraform-apply.yml

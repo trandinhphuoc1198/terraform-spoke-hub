@@ -5,7 +5,7 @@
 # WHY NAMESPACE DELETE, NOT `kubectl delete pvc`:
 #   A PVC carries the kubernetes.io/pvc-protection finalizer, which only
 #   clears once no Pod is still using it. kube-prometheus-stack's
-#   Prometheus/Grafana and Tempo's ingester are StatefulSets/Deployments —
+#   Prometheus/Grafana and Tempo's ingester are StatefulSets/Deployments -
 #   their pods are still running at this point, so `kubectl delete pvc`
 #   alone just leaves it stuck in Terminating forever: the pod never gets
 #   torn down, the volume attachment never releases, the finalizer never
@@ -18,16 +18,16 @@
 #   issues DeleteVolume. This only works because platform/values/spoke/
 #   ebs-csi.yaml sets reclaimPolicy: Delete on the ebs-csi StorageClass.
 #
-# CAVEAT — ArgoCD self-heal race:
+# CAVEAT - ArgoCD self-heal race:
 #   If this spoke/hub is still registered with ArgoCD and its Applications
 #   have selfHeal: true, ArgoCD *could* try to recreate a deleted namespace
 #   mid-drain. It can't successfully create resources into a Terminating
 #   namespace, so this mostly just delays things rather than corrupting the
-#   drain — but if you want to eliminate the race entirely, deregister the
+#   drain - but if you want to eliminate the race entirely, deregister the
 #   cluster from ArgoCD (delete argocd/clusters/<name>.yaml + the cluster
 #   Secret) BEFORE running this, so ArgoCD prunes everything itself first.
 #
-# Always exits 0 — a stuck PVC should not block terraform destroy from
+# Always exits 0 - a stuck PVC should not block terraform destroy from
 # proceeding. The caller (GitHub Actions step) surfaces the warning.
 set -uo pipefail
 export KUBECONFIG=/home/ec2-user/.kube/config
@@ -37,7 +37,7 @@ echo "=== Discovering namespaces with PersistentVolumeClaims ==="
 NS_LIST=$(kubectl get pvc --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{"\n"}{end}' 2>/dev/null | sort -u)
 
 if [ -z "$NS_LIST" ]; then
-  echo "No PVCs found on this cluster — nothing to drain."
+  echo "No PVCs found on this cluster - nothing to drain."
   exit 0
 fi
 
@@ -52,7 +52,7 @@ echo "=== Waiting for PVCs to fully terminate (up to 8 minutes) ==="
 for i in $(seq 1 48); do
   REMAINING=$(kubectl get pvc --all-namespaces --no-headers 2>/dev/null | wc -l)
   if [ "$REMAINING" -eq 0 ]; then
-    echo "All PVCs cleaned up — their backing EBS volumes have been deleted."
+    echo "All PVCs cleaned up - their backing EBS volumes have been deleted."
     exit 0
   fi
   echo "  $REMAINING PVC(s) still terminating (attempt $i/48)..."

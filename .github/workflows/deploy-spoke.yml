@@ -7,25 +7,25 @@ name: deploy-spoke
 # REFACTORED: this used to duplicate deploy-spoke-infra.yml's three jobs
 # verbatim. It now just chains the two reusable workflows that already
 # implement each half of the pipeline:
-#   1. deploy-spoke-infra.yml  — terraform apply -> kubeadm bootstrap ->
+#   1. deploy-spoke-infra.yml  - terraform apply -> kubeadm bootstrap ->
 #      push argocd-manager token to Secrets Manager
-#   2. verify-spoke-registration.yml — waits for ESO/root-clusters to
+#   2. verify-spoke-registration.yml - waits for ESO/root-clusters to
 #      materialize the registration Secret on the hub
 #
 # deploy-all.yml calls these same two reusable workflows directly instead
 # (in parallel with deploy-hub.yml, since spoke's terraform state has no
-# dependency on hub's — see that file's header comment). This workflow
+# dependency on hub's - see that file's header comment). This workflow
 # exists for the common "day-2 single spoke change, I want the full chain
 # in one run" case, without hand-duplicating deploy-spoke-infra.yml's
 # steps here too.
 #
-# Requires the hub's Argo CD to already be installed (deploy-hub.yml) —
+# Requires the hub's Argo CD to already be installed (deploy-hub.yml) -
 # that's a real dependency (this cluster is registering *into* the hub's
 # Argo CD), not just a CI artifact. For a brand-new environment, run
 # deploy-all.yml instead, or run deploy-hub.yml once first.
 #
 # `spoke_dir` lets this same workflow drive additional spokes later
-# (e.g. live/spoke-2) without copy-pasting new workflow jobs — see the
+# (e.g. live/spoke-2) without copy-pasting new workflow jobs - see the
 # README's "Adding a second spoke later" section.
 
 on:

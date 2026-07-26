@@ -1,4 +1,4 @@
-# kubeadm on AWS — Hub/Spoke Kubernetes Infrastructure
+# kubeadm on AWS - Hub/Spoke Kubernetes Infrastructure
 
 A Terraform + Packer + GitHub Actions monorepo that stands up one or more
 **self-managed kubeadm clusters on AWS**, wired together in a **hub/spoke**
@@ -32,16 +32,16 @@ you work.
               └────────────────────────┘   └────────────────────────┘
 ```
 
-* **`global/network`** — a shared Transit Gateway (TGW). Applied once,
+* **`global/network`** - a shared Transit Gateway (TGW). Applied once,
   independently, before hub or spoke. Neither hub nor spoke can
   accidentally destroy/recreate it as a side effect of their own changes.
-* **`live/hub`** — one Kubernetes cluster whose only real job is to run
+* **`live/hub`** - one Kubernetes cluster whose only real job is to run
   **Argo CD**, the GitOps controller for the whole fleet. Its ALB serves
   the Argo CD UI/API.
-* **`live/spoke`** — one Kubernetes cluster that runs actual application
+* **`live/spoke`** - one Kubernetes cluster that runs actual application
   workloads (the repo ships with `prometheus`, `fastapi`, `grafana`,
   `hubble` as example apps). Additional spokes are added by copying this
-  root (e.g. `live/spoke-2`) — see "Adding a second spoke" below.
+  root (e.g. `live/spoke-2`) - see "Adding a second spoke" below.
 * Hub and spoke VPCs are connected through the shared TGW so the hub's
   Argo CD can reach each spoke's `kube-apiserver` directly (pull-based
   GitOps against every registered cluster).
@@ -56,7 +56,7 @@ differing mainly in a few module flags (`install_eso`, `register_with_hub`,
 ## Repo layout
 
 ```
-global/network/          Shared Transit Gateway — its own state, apply first
+global/network/          Shared Transit Gateway - its own state, apply first
 live/hub/                Hub cluster root module (Argo CD)
 live/spoke/              Spoke cluster root module (app workloads)
 modules/                 Reusable Terraform modules (see table below)
@@ -69,7 +69,7 @@ packer/                  Packer + Ansible build for the shared k8s base AMI
 
 | Module | Purpose |
 |---|---|
-| [`vpc`](modules/vpc/README.md) | VPC, public/private subnets, NAT **instance** (not NAT Gateway — cost optimization), S3 gateway endpoint, SSM interface endpoints |
+| [`vpc`](modules/vpc/README.md) | VPC, public/private subnets, NAT **instance** (not NAT Gateway - cost optimization), S3 gateway endpoint, SSM interface endpoints |
 | [`ami`](modules/ami/README.md) | Looks up the newest Packer-built k8s base AMI (`purpose=k8s-base` tag) |
 | [`ec2`](modules/ec2/README.md) | Master node + all shared IAM roles/security groups for master and workers |
 | [`asg`](modules/asg/README.md) | Worker Launch Template + Auto Scaling Group, tagged for Cluster Autoscaler discovery |
@@ -77,7 +77,7 @@ packer/                  Packer + Ansible build for the shared k8s base AMI
 | [`acm`](modules/acm/README.md) | ACM certificate for the ALB's HTTPS listener, optional Route 53 auto-validation |
 | [`s3`](modules/s3/README.md) | Application/cluster S3 buckets (spoke only) |
 | [`tgw-attachment`](modules/tgw-attachment) | Attaches a cluster's VPC to the shared TGW and adds peer routes |
-| [`k8s`](modules/k8s/README.md) | Renders `master_userdata` / `worker_userdata` bootstrap scripts (content only — doesn't attach or run anything) |
+| [`k8s`](modules/k8s/README.md) | Renders `master_userdata` / `worker_userdata` bootstrap scripts (content only - doesn't attach or run anything) |
 
 ---
 
@@ -97,7 +97,7 @@ every boot) and later grew to include imperative Argo CD/CCM/ESO installs
 directly in Terraform. Both were refactored out:
 
 * **AMI baking** (Packer/Ansible) removes repeated package installs from
-  every boot — faster, more reliable launches, and worker scale-out via
+  every boot - faster, more reliable launches, and worker scale-out via
   Cluster Autoscaler no longer depends on package mirrors being reachable
   at exactly the right moment.
 * **Moving `kubeadm init` out of master `user_data` and into a CI job**
@@ -105,7 +105,7 @@ directly in Terraform. Both were refactored out:
   failed bootstrap shows up as a **failed GitHub Actions job with logs**,
   instead of failing silently inside `cloud-init` on a box nobody is
   watching.
-* Workers still run `kubeadm join` from `user_data` at launch time — ASG
+* Workers still run `kubeadm join` from `user_data` at launch time - ASG
   scale-out (driven by Cluster Autoscaler) has no CI trigger to hook into,
   so it has to stay boot-time and poll SSM for the join token
   (`modules/k8s/templates/worker_init.sh.tpl`).
@@ -116,7 +116,7 @@ directly in Terraform. Both were refactored out:
   script embedded in a `.tf` file.
 
 One exception: AWS CCM is still installed imperatively inside
-`master_init.sh.tpl`, unconditionally, on every cluster — every node
+`master_init.sh.tpl`, unconditionally, on every cluster - every node
 carries the `node.cloudprovider.kubernetes.io/uninitialized:NoSchedule`
 taint from `cloud-provider=external` until CCM clears it, and that has to
 happen before anything (including Argo CD's own pods) can schedule.
@@ -140,7 +140,7 @@ aws ssm start-session --target <master_instance_id>
   (`ssm`, `ssmmessages`, `ec2messages`) required for the agent to reach
   Session Manager without a route to the public internet.
 
-SSH (port 22) still works as a fallback, but only from inside the VPC — it
+SSH (port 22) still works as a fallback, but only from inside the VPC - it
 is not reachable from the internet.
 
 ---
@@ -166,7 +166,7 @@ tracing end to end:
    materializes a Kubernetes `Secret` labeled
    `argocd.argoproj.io/secret-type=cluster`.
 4. Argo CD sees the labeled Secret and treats the spoke as a registered
-   cluster — no `argocd cluster add` step, no CI step that mutates the
+   cluster - no `argocd cluster add` step, no CI step that mutates the
    hub on every spoke deploy.
 5. **CI (`verify-spoke-registration.yml`)** polls the hub (again via SSM) for
    that Secret to confirm the pipeline actually completed, and fails
@@ -183,7 +183,7 @@ action: it happens by adding `argocd/clusters/<name>.yaml` to the separate
 
 * **NAT instance, not NAT Gateway.** A single `t3.small` EC2 instance
   (`modules/vpc`) provides outbound internet access for both private
-  subnets — cheaper than a managed NAT Gateway for a learning/small-fleet
+  subnets - cheaper than a managed NAT Gateway for a learning/small-fleet
   setup. `live/hub` and `live/spoke` both run a `null_resource` with a
   `local-exec` provisioner that waits for `instance-status-ok` on the NAT
   instance before any worker (or the master) launches, so nodes don't race
@@ -191,7 +191,7 @@ action: it happens by adding `argocd/clusters/<name>.yaml` to the separate
 * **S3 traffic bypasses the NAT instance** via a Gateway VPC endpoint.
 * **CIDR overlap guard.** Both `live/hub/main.tf` and `live/spoke/main.tf`
   define a Terraform `check` block that converts every relevant CIDR to a
-  numeric range and asserts none overlap — this catches a copy-pasted
+  numeric range and asserts none overlap - this catches a copy-pasted
   `vpc_cidr` at `terraform plan` time instead of deep inside a failed TGW
   route `apply`.
 * **ALB → NodePort.** The ALB never talks to Kubernetes directly; it
@@ -205,23 +205,23 @@ action: it happens by adding `argocd/clusters/<name>.yaml` to the separate
 ## Apply order (first-time bring-up)
 
 ```
-1. global/network   (shared TGW — must exist before hub or spoke)
+1. global/network   (shared TGW - must exist before hub or spoke)
 2. live/hub         (terraform apply → kubeadm bootstrap → Argo CD install)
 3. live/spoke       (terraform apply → kubeadm bootstrap → register with hub → verify)
 ```
 
 Use **`deploy-all.yml`** (GitHub Actions, manual trigger) to run all three
 in order for a brand-new environment. For any day-2 change to a single
-cluster, use the narrower workflow instead — it won't force an unrelated
+cluster, use the narrower workflow instead - it won't force an unrelated
 cluster's bootstrap/Argo CD steps to re-run:
 
 | Workflow | Scope |
 |---|---|
-| `deploy-network.yml` | `global/network` only — rare, e.g. changing `amazon_side_asn` |
+| `deploy-network.yml` | `global/network` only - rare, e.g. changing `amazon_side_asn` |
 | `deploy-hub.yml` | `live/hub` terraform apply → kubeadm/CNI → Argo CD install |
 | `deploy-spoke.yml` | `live/spoke` (or any `spoke_dir`) terraform apply → kubeadm/CNI → register with hub → verify Argo CD registration |
-| `deploy-all.yml` | Chains all three — **first-time bring-up only** |
-| `packer-build-ami.yml` | Manual only — builds a new base AMI (never runs on push/PR) |
+| `deploy-all.yml` | Chains all three - **first-time bring-up only** |
+| `packer-build-ami.yml` | Manual only - builds a new base AMI (never runs on push/PR) |
 
 ### Adding a second spoke later
 
@@ -232,7 +232,7 @@ second spoke doesn't require new workflow jobs:
 1. Copy `live/spoke` → `live/spoke-2` (new backend key, new `vpc_cidr`
    disjoint from every other cluster, new `envs/<env>/terraform.tfvars`).
 2. Add its CIDR to `live/hub`'s `spoke_vpc_cidrs` and re-apply the hub
-   (needed for the TGW route + apiserver trust — see `trusted_api_cidr_blocks`).
+   (needed for the TGW route + apiserver trust - see `trusted_api_cidr_blocks`).
 3. Run `deploy-spoke.yml` with `spoke_dir: live/spoke-2`.
 
 ---
@@ -240,7 +240,7 @@ second spoke doesn't require new workflow jobs:
 ## State & backend
 
 All roots use an **S3 backend** with **S3 native locking**
-(`use_lockfile = true` — no DynamoDB table required), bucket
+(`use_lockfile = true` - no DynamoDB table required), bucket
 `terraform-state-phuoctd6`, region `ap-northeast-1`. Each root's `key` is
 supplied at `terraform init` time via `-backend-config=envs/<env>/backend.hcl`
 so `backend.tf` itself stays identical across environments:
@@ -252,7 +252,7 @@ so `backend.tf` itself stays identical across environments:
 | `live/spoke` | `spoke/<env>/terraform.tfstate` |
 
 `live/hub` and `live/spoke` each read `global/network`'s state via
-`terraform_remote_state` (one-directional — network has no dependency
+`terraform_remote_state` (one-directional - network has no dependency
 back on hub/spoke, so it's safe to apply hub/spoke any time after network
 has been applied once).
 
@@ -262,8 +262,8 @@ has been applied once).
 
 * `terraform fmt -check`
 * `terraform validate` (matrix: `global/network`, `live/hub`, `live/spoke`; `init -backend=false`, no real credentials needed)
-* `tflint` (matrix, same three roots — see `.tflint.hcl` for enabled rules)
-* `packer validate` + `packer fmt -check` + `ansible-lint` (static only — CI has no AWS credentials, so it cannot actually launch a build instance)
+* `tflint` (matrix, same three roots - see `.tflint.hcl` for enabled rules)
+* `packer validate` + `packer fmt -check` + `ansible-lint` (static only - CI has no AWS credentials, so it cannot actually launch a build instance)
 * `trivy` config scan across the whole repo
 
 ---
@@ -275,13 +275,13 @@ has been applied once).
   fight AWS Cloud Controller Manager, which adds its own SG rules for
   LoadBalancer-type Services at runtime.
 * The worker IAM role's S3 policy (`modules/ec2`) is scoped to
-  `s3_bucket_arns` when non-empty, otherwise omitted entirely — the hub
+  `s3_bucket_arns` when non-empty, otherwise omitted entirely - the hub
   passes none (it has no S3-backed workloads).
 * The join-token SSM parameter (`/​<env>/k8s/join_token`) is a
-  `SecureString`; Terraform is told to ignore its `value` — the master
+  `SecureString`; Terraform is told to ignore its `value` - the master
   writes the real token at bootstrap time, and Terraform must not
   overwrite it back to the placeholder on a later `apply`.
-* `.tflint.hcl` deliberately disables `terraform_module_pinned_source` —
+* `.tflint.hcl` deliberately disables `terraform_module_pinned_source` -
   every module source is a local path in this monorepo, so version
   pinning doesn't apply the way it would for a remote/registry source.
 
@@ -290,12 +290,12 @@ has been applied once).
 ## Where to look next
 
 * Each module has its own `README.md` with resource tables, variable
-  references, and design rationale — read the module's README before
+  references, and design rationale - read the module's README before
   changing its `main.tf`.
 * `packer/README.md` explains exactly what's baked into the AMI vs. what
   stays dynamic, and the rollout implications of a new AMI build (workers
   roll via `instance_refresh`; the master is a single instance and needs a
   manual replace).
 * `modules/k8s/README.md` has the full table of "who owns what" for
-  cluster bring-up (kubeadm vs. CI vs. Argo CD) — the single best
+  cluster bring-up (kubeadm vs. CI vs. Argo CD) - the single best
   reference if you're debugging why something didn't get installed.

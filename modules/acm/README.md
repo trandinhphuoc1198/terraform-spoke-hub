@@ -9,8 +9,8 @@ Provisions an **AWS Certificate Manager (ACM) SSL/TLS certificate** for HTTPS su
 | Resource | Name pattern | Purpose |
 |---|---|---|
 | `aws_acm_certificate` | `${env}-k8s-cert` | ACM certificate for the primary domain and `www.` subdomain (SAN) |
-| `aws_route53_record` (×N, optional) | — | DNS CNAME validation records (only if `route53_zone_id` is set) |
-| `aws_acm_certificate_validation` | — | Waits for the certificate to transition from PENDING_VALIDATION to ISSUED (only if `route53_zone_id` is set) |
+| `aws_route53_record` (×N, optional) | - | DNS CNAME validation records (only if `route53_zone_id` is set) |
+| `aws_acm_certificate_validation` | - | Waits for the certificate to transition from PENDING_VALIDATION to ISSUED (only if `route53_zone_id` is set) |
 
 ---
 
@@ -40,7 +40,7 @@ If `var.route53_zone_id` is left empty (`""`), the `validation_records` output p
 |---|---|
 | **Validation method** | DNS (CNAME) |
 | **Domain names** | Primary domain + `www.` subdomain (SAN) |
-| **Lifecycle** | `create_before_destroy` — during renewal/domain changes, the new cert is fully issued before the old one is deleted, preventing ALB downtime |
+| **Lifecycle** | `create_before_destroy` - during renewal/domain changes, the new cert is fully issued before the old one is deleted, preventing ALB downtime |
 | **Auto-renewal** | Automatic (AWS ACM manages this) |
 
 ---
@@ -73,9 +73,9 @@ The ALB's HTTPS listener (port 443) will use this certificate to terminate TLS c
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `env` | `string` | — | Environment name — used as a tag on the certificate |
-| `domain_name` | `string` | — | Primary domain for the certificate (e.g. `example.com`). A SAN for `www.<domain>` is added automatically. |
-| `route53_zone_id` | `string` | `""` | Route 53 hosted zone ID for automatic DNS validation. Leave empty (`""`) if DNS is managed outside AWS — in that case, add CNAME records manually using the `validation_records` output. |
+| `env` | `string` | - | Environment name - used as a tag on the certificate |
+| `domain_name` | `string` | - | Primary domain for the certificate (e.g. `example.com`). A SAN for `www.<domain>` is added automatically. |
+| `route53_zone_id` | `string` | `""` | Route 53 hosted zone ID for automatic DNS validation. Leave empty (`""`) if DNS is managed outside AWS - in that case, add CNAME records manually using the `validation_records` output. |
 
 ---
 
@@ -83,7 +83,7 @@ The ALB's HTTPS listener (port 443) will use this certificate to terminate TLS c
 
 | Name | Description |
 |---|---|
-| `certificate_arn` | ARN of the issued ACM certificate — pass this to the `alb` module's `certificate_arn` variable |
+| `certificate_arn` | ARN of the issued ACM certificate - pass this to the `alb` module's `certificate_arn` variable |
 | `validation_records` | Map of DNS validation CNAME records needed for ACM validation. Only required if `route53_zone_id` is empty (manual DNS validation). |
 
 ---

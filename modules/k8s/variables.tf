@@ -14,7 +14,7 @@ variable "env" {
 }
 
 variable "pod_cidr_supernet" {
-  description = "Fleet-wide pod-CIDR supernet (see README). Sets Cilium's ipv4NativeRoutingCIDR so cross-cluster Cluster Mesh pod traffic isn't masqueraded — must stay wider than just this cluster's own pod_cidr."
+  description = "Fleet-wide pod-CIDR supernet (see README). Sets Cilium's ipv4NativeRoutingCIDR so cross-cluster Cluster Mesh pod traffic isn't masqueraded - must stay wider than just this cluster's own pod_cidr."
   type        = string
   default     = "100.64.0.0/10"
 }

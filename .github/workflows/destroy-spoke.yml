@@ -4,25 +4,25 @@ name: destroy-spoke
 # live/hub and does not touch global/network.
 #
 # Three phases, each its own reusable workflow, chained here for standalone
-# use — destroy-all.yml calls these same three workflows directly instead,
+# use - destroy-all.yml calls these same three workflows directly instead,
 # so it can interleave drain-spoke-pvcs.yml / terraform-destroy-spoke.yml
 # with drain-hub-pvcs.yml / terraform-destroy-hub.yml and run both
 # clusters' terraform destroy in parallel:
-#   1. deregister-from-argocd — fully removes the spoke from ArgoCD's
+#   1. deregister-from-argocd - fully removes the spoke from ArgoCD's
 #      inventory (see k8s-deregister-from-hub.yml) so nothing can recreate
 #      a workload while draining runs. Fails the whole job if it can't be
-#      confirmed — this is the piece that makes the rest of this pipeline
+#      confirmed - this is the piece that makes the rest of this pipeline
 #      race-free rather than best-effort.
-#   2. drain-spoke-pvcs — drains every remaining PersistentVolumeClaim so
+#   2. drain-spoke-pvcs - drains every remaining PersistentVolumeClaim so
 #      the aws-ebs-csi-driver issues DeleteVolume for every EBS volume
 #      Terraform never created. Runs risk-free now that ArgoCD can no
-#      longer resurrect anything. Best-effort — a stuck PVC logs a warning
+#      longer resurrect anything. Best-effort - a stuck PVC logs a warning
 #      rather than blocking teardown.
-#   3. terraform-destroy-spoke — removes the Terraform-managed infra itself.
+#   3. terraform-destroy-spoke - removes the Terraform-managed infra itself.
 #
 # NOTE: this only destroys the Terraform-managed infra and the ArgoCD
 # registration (phase 1). It does NOT remove the argocd-clusters/<name>
-# secret in AWS Secrets Manager — that's inert once the ArgoCD-side Secret
+# secret in AWS Secrets Manager - that's inert once the ArgoCD-side Secret
 # and git file are gone, but delete it too if you want to fully clean up.
 #
 # `spoke_dir` mirrors deploy-spoke.yml so this same workflow can tear down
@@ -63,7 +63,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── Phase 1: deregister from ArgoCD (race-free — see that workflow) ──────
+  # ── Phase 1: deregister from ArgoCD (race-free - see that workflow) ──────
   deregister-from-argocd:
     name: "deregister from hub argocd (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
     uses: ./.github/workflows/k8s-deregister-from-hub.yml

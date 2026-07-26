@@ -1,6 +1,6 @@
 # Module: `asg`
 
-Provisions the **worker node pool** — an EC2 Launch Template and Auto Scaling Group that runs Kubernetes worker nodes in private subnets. The ASG is tagged for discovery by both the AWS Cloud Controller Manager and Cluster Autoscaler.
+Provisions the **worker node pool** - an EC2 Launch Template and Auto Scaling Group that runs Kubernetes worker nodes in private subnets. The ASG is tagged for discovery by both the AWS Cloud Controller Manager and Cluster Autoscaler.
 
 ---
 
@@ -24,7 +24,7 @@ k8s.io/cluster-autoscaler/enabled              = "true"
 k8s.io/cluster-autoscaler/${cluster_name}      = "owned"
 ```
 
-These tags must match the `--node-group-auto-discovery` argument in the Cluster Autoscaler pod spec. After the first `terraform apply`, `desired_capacity` is managed by the Cluster Autoscaler — Terraform is told to ignore changes to it:
+These tags must match the `--node-group-auto-discovery` argument in the Cluster Autoscaler pod spec. After the first `terraform apply`, `desired_capacity` is managed by the Cluster Autoscaler - Terraform is told to ignore changes to it:
 
 ```hcl
 lifecycle {
@@ -62,18 +62,18 @@ The worker bootstrap script configures the system to expose two main NodePorts f
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `env` | `string` | — | Environment name — prefix for resource names and ASG tags |
-| `worker_instance_type` | `string` | — | EC2 instance type for all worker nodes |
-| `key_name` | `string` | — | EC2 SSH key pair name |
-| `private_subnet_ids` | `list(string)` | — | Private subnets the ASG distributes workers across |
-| `worker_sg_id` | `string` | — | Security group ID applied to all worker instances (from `ec2` module) |
-| `worker_iam_instance_profile_name` | `string` | — | IAM instance profile for workers (from `ec2` module) |
-| `k8s_worker_bootstrap` | `string` | — | Worker `user_data` script (from `k8s` module output) |
+| `env` | `string` | - | Environment name - prefix for resource names and ASG tags |
+| `worker_instance_type` | `string` | - | EC2 instance type for all worker nodes |
+| `key_name` | `string` | - | EC2 SSH key pair name |
+| `private_subnet_ids` | `list(string)` | - | Private subnets the ASG distributes workers across |
+| `worker_sg_id` | `string` | - | Security group ID applied to all worker instances (from `ec2` module) |
+| `worker_iam_instance_profile_name` | `string` | - | IAM instance profile for workers (from `ec2` module) |
+| `k8s_worker_bootstrap` | `string` | - | Worker `user_data` script (from `k8s` module output) |
 | `worker_min` | `number` | `1` | Minimum number of worker nodes |
 | `worker_max` | `number` | `10` | Maximum number of worker nodes |
 | `worker_desired` | `number` | `2` | Initial desired count (managed by Cluster Autoscaler after first apply) |
 | `worker_volume_size` | `number` | `20` | Root EBS volume size in GB |
-| `cluster_name` | `string` | — | Kubernetes cluster name — embedded in ASG auto-discovery tags |
+| `cluster_name` | `string` | - | Kubernetes cluster name - embedded in ASG auto-discovery tags |
 | `https_nodeport` | `number` | `30443` | HTTPS NodePort that the ALB target groups forward to (for NGINX Ingress HTTPS) |
 
 ---
@@ -82,5 +82,5 @@ The worker bootstrap script configures the system to expose two main NodePorts f
 
 | Name | Description |
 |---|---|
-| `asg_name` | Name of the Auto Scaling Group — passed to the `alb` module for target group attachment, and useful as input to Cluster Autoscaler Helm values |
+| `asg_name` | Name of the Auto Scaling Group - passed to the `alb` module for target group attachment, and useful as input to Cluster Autoscaler Helm values |
 | `launch_template_id` | ID of the worker Launch Template |

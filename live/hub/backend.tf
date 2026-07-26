@@ -1,7 +1,7 @@
 terraform {
   required_version = ">= 1.5.0"
 
-  # `key` is intentionally omitted — passed at `terraform init` time via
+  # `key` is intentionally omitted - passed at `terraform init` time via
   # -backend-config so this file is identical across every environment.
   # See envs/<env>/backend.hcl.
   backend "s3" {

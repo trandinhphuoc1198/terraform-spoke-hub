@@ -74,12 +74,12 @@ for i in $(seq 1 30); do
 done
 
 # ── CNI ─────────────────────────────────────────────────────────────────
-# Unconditional — every cluster (hub and spoke) needs pod networking to
+# Unconditional - every cluster (hub and spoke) needs pod networking to
 # reach Ready, regardless of whether it also runs Argo CD/CCM/ESO.
 #
 # routingMode=native (was tunnel): pod traffic between nodes is no longer
 # VXLAN-encapsulated. Nodes span multiple AZs/subnets (not L2-adjacent),
-# so autoDirectNodeRoutes stays off — cross-node pod routing depends on
+# so autoDirectNodeRoutes stays off - cross-node pod routing depends on
 # the AWS CCM route controller installed below keeping the VPC route
 # table in sync with each node's podCIDR. See
 # platform/values/base/cilium.yaml for the full rationale; this inline
@@ -123,20 +123,20 @@ for i in $(seq 1 5); do
 done
 
 # ── AWS Cloud Controller Manager ──────────────────────────────────────────
-# Unconditional — every node registers with cloud-provider=external, so every
+# Unconditional - every node registers with cloud-provider=external, so every
 # node (hub and spoke, master and workers) carries the
 # node.cloudprovider.kubernetes.io/uninitialized:NoSchedule taint until CCM
 # runs and clears it. This MUST happen before anything else tries to
-# schedule — including Argo CD's own pods, which is why this can't be an
+# schedule - including Argo CD's own pods, which is why this can't be an
 # Argo CD Application (Argo CD's chart ships no toleration for this taint;
 # CNI's DaemonSet does, which is why CNI is safe to apply before this step).
 #
 # --configure-cloud-routes=true (was false): with Cilium routingMode=native
-# above, this is what actually makes cross-AZ pod traffic routable — CCM's
+# above, this is what actually makes cross-AZ pod traffic routable - CCM's
 # route controller watches node.spec.podCIDR and syncs the matching route
 # into the VPC route table modules/vpc tags with
 # kubernetes.io/cluster/<cluster_name> (master's IAM role
-# — master_ccm_policy in modules/ec2/main.tf — is scoped to that same tag).
+# - master_ccm_policy in modules/ec2/main.tf - is scoped to that same tag).
 # --cluster-cidr is required for the route controller to start.
 echo "=== Installing AWS CCM ===" >> /var/log/kubeadm-init.log
 helm repo add aws-cloud-controller-manager https://kubernetes.github.io/cloud-provider-aws
@@ -154,7 +154,7 @@ kubectl wait node --all --for=condition=Ready --timeout=180s
 # ── Join-token push script + rotation timer ──────────────────────────────
 # This is the only "hand-off" Terraform-owned bootstrap needs to make: it
 # publishes what a worker needs to join. Everything past "node is Ready"
-# (CCM, Argo CD, ESO, hub registration) is intentionally NOT here anymore —
+# (CCM, Argo CD, ESO, hub registration) is intentionally NOT here anymore -
 # see modules/k8s/README.md for where each of those now lives.
 
 echo "=== Installing join-token push script ===" >> /var/log/kubeadm-init.log

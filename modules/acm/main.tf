@@ -1,6 +1,6 @@
 # ── ACM Certificate ───────────────────────────────────────────────────────────
 # create_before_destroy ensures a new cert is fully issued before the old one
-# is destroyed during any future domain change — preventing ALB downtime.
+# is destroyed during any future domain change - preventing ALB downtime.
 resource "aws_acm_certificate" "this" {
   domain_name               = var.domain_name
   subject_alternative_names = ["www.${var.domain_name}"]

@@ -29,7 +29,7 @@ variable "peer_cidr_blocks" {
 }
 
 variable "tgw_default_route_table_id" {
-  description = "Default TGW route table ID (global/network's transit_gateway_default_route_table_id output). Used to register this cluster's own pod CIDR as a static route — self-registered, no coordination with hub or sibling spokes needed."
+  description = "Default TGW route table ID (global/network's transit_gateway_default_route_table_id output). Used to register this cluster's own pod CIDR as a static route - self-registered, no coordination with hub or sibling spokes needed."
   type        = string
 }
 
@@ -39,7 +39,7 @@ variable "own_pod_cidr" {
 }
 
 variable "pod_cidr_supernet" {
-  description = "Fleet-wide pod-CIDR supernet reserved for every cluster's pod_cidr (hub + every spoke — see README). Routed to the TGW from this cluster's own route tables so Cilium Cluster Mesh native-routed pod traffic can reach any other cluster without a per-peer route entry."
+  description = "Fleet-wide pod-CIDR supernet reserved for every cluster's pod_cidr (hub + every spoke - see README). Routed to the TGW from this cluster's own route tables so Cilium Cluster Mesh native-routed pod traffic can reach any other cluster without a per-peer route entry."
   type        = string
   default     = "100.64.0.0/10"
 }

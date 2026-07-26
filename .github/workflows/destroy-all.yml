@@ -3,27 +3,27 @@ name: destroy-all
 # FULL TEARDOWN of an environment.
 #
 # Order:
-#   1. deregister-from-argocd — spoke must be pulled out of the hub's
+#   1. deregister-from-argocd - spoke must be pulled out of the hub's
 #      ArgoCD inventory FIRST. This step runs SSM commands against the HUB
 #      master, so it must complete (and the hub master must still be
 #      alive) before either cluster's terraform destroy can safely run.
-#   2. drain-spoke + drain-hub — run IN PARALLEL. Both only need
+#   2. drain-spoke + drain-hub - run IN PARALLEL. Both only need
 #      deregistration to have completed; draining one cluster's PVCs has
 #      no dependency on the other's.
-#   3. terraform-destroy-spoke + terraform-destroy-hub — run IN PARALLEL,
+#   3. terraform-destroy-spoke + terraform-destroy-hub - run IN PARALLEL,
 #      each gated only on its own cluster's drain having finished.
-#   4. network — the shared Transit Gateway, destroyed last since both
+#   4. network - the shared Transit Gateway, destroyed last since both
 #      live/hub and live/spoke read its state via terraform_remote_state.
 #
 # This is the REVERSE of deploy-all.yml's bring-up order in spirit (network
 # still goes first on the way up, last on the way down), but spoke and hub
-# themselves are no longer strictly sequential on the way down — only the
+# themselves are no longer strictly sequential on the way down - only the
 # ArgoCD deregistration step forces an ordering constraint, because it's
 # the one phase that depends on the *other* cluster (the hub) still being
 # up while it runs.
 #
 # For tearing down a single cluster only, use destroy-spoke.yml or
-# destroy-hub.yml directly instead — this workflow destroys everything
+# destroy-hub.yml directly instead - this workflow destroys everything
 # in the given environment, including the shared Transit Gateway that
 # any other spoke (e.g. live/spoke-2) also depends on.
 

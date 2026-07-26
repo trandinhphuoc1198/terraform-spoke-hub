@@ -40,7 +40,7 @@ kubectl create secret generic hub-local-cluster -n "$ARGOCD_NAMESPACE" \
   kubectl apply -f -
 
 # This is the ONLY kubectl apply of gitops-repo content that comes from CI.
-# Everything downstream — CCM, ESO, all apps — is Argo CD syncing from Git
+# Everything downstream - CCM, ESO, all apps - is Argo CD syncing from Git
 # continuously from this point forward.
 echo "=== Applying Argo CD bootstrap manifests from gitops repo ==="
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/projects/platform-infra.yaml"

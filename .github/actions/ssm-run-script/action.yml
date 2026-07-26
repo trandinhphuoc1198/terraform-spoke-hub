@@ -15,7 +15,7 @@ inputs:
   script-path:
     description: >
       Path to the local script file to upload and run. Resolved relative
-      to the repository root (GITHUB_WORKSPACE) — composite action steps
+      to the repository root (GITHUB_WORKSPACE) - composite action steps
       do NOT inherit the calling job's `defaults.run.working-directory`,
       so pass an absolute path (e.g. /tmp/foo.sh) or a path relative to
       the repo root (e.g. .github/scripts/foo.sh.tpl), never a path
@@ -44,7 +44,7 @@ inputs:
 
 outputs:
   cmd_id:
-    description: "The SSM Command ID — use this to fetch stdout/stderr afterward"
+    description: "The SSM Command ID - use this to fetch stdout/stderr afterward"
     value: ${{ steps.run.outputs.cmd_id }}
   status:
     description: "Final status: Success, Failed, Cancelled, TimedOut, or Timeout (our own poll-exhausted state)"

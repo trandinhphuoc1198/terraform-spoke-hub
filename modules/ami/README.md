@@ -2,7 +2,7 @@
 
 Looks up the most recent Packer-built k8s base AMI (see `/packer` at the
 repo root) and outputs its ID. One AMI is shared by both the master node
-(`modules/ec2`) and the worker Auto Scaling Group (`modules/asg`) — same
+(`modules/ec2`) and the worker Auto Scaling Group (`modules/asg`) - same
 pattern as the single AL2023 AMI they both resolved before this change,
 except now it's a custom image with containerd/kubeadm/kubelet/kubectl and
 node prep baked in via Ansible instead of installed at every boot.

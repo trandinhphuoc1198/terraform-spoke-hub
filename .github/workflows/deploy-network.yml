@@ -1,12 +1,12 @@
 name: deploy-network
 
-# Shared Transit Gateway (global/network). Applied rarely — only when the
+# Shared Transit Gateway (global/network). Applied rarely - only when the
 # TGW itself changes (e.g. adding amazon_side_asn changes, which shouldn't
 # happen often) or on first-time bring-up. Independent of hub/spoke: run
 # this on its own, don't bundle it into every hub/spoke change.
 #
 # NOTE: this is the piece both live/hub and live/spoke read via
-# terraform_remote_state — it must exist before either of those roots is
+# terraform_remote_state - it must exist before either of those roots is
 # applied for the first time (see deploy-all.yml for full bring-up order).
 #
 # The actual terraform init/plan/apply steps live in the shared

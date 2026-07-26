@@ -5,27 +5,27 @@ name: k8s-deregister-from-hub
 # which ArgoCD's selfHeal could recreate a workload while destroy-spoke's
 # PVC drain step is running.
 #
-# TEMPORARY BY DESIGN — this never touches git. It deletes the spoke's
+# TEMPORARY BY DESIGN - this never touches git. It deletes the spoke's
 # ArgoCD Applications and its ExternalSecret/Secret directly on the hub
 # cluster. root-clusters (an ArgoCD Application with selfHeal: true
 # watching argocd/clusters/) will recreate the ExternalSecret from git on
-# its own next reconcile (default ~3 min) — that's expected and harmless
+# its own next reconcile (default ~3 min) - that's expected and harmless
 # here: by the time it does, the spoke cluster this workflow is tearing
 # down is either already gone or mid-destroy, so there's nothing left for
 # ArgoCD to actually schedule anything onto. If you want a PERMANENT
 # deregistration instead (e.g. retiring a spoke for good), delete
-# argocd/clusters/<cluster_name>.yaml from the gitops repo yourself — that
+# argocd/clusters/<cluster_name>.yaml from the gitops repo yourself - that
 # is a deliberate, separate action from this workflow.
 #
 # What "race-free" means here: this deletes every ArgoCD Application
 # generated for this spoke (spokes/infra/**, spokes/workloads/**) with
-# `--cascade=foreground --wait`, which blocks until every child resource —
+# `--cascade=foreground --wait`, which blocks until every child resource -
 # namespaces, Deployments, StatefulSets, and any standalone PVCs rendered
-# directly by a chart — is actually gone from the spoke, not just until the
+# directly by a chart - is actually gone from the spoke, not just until the
 # Application object is marked Deleting. Only after that succeeds does it
 # remove the cluster's ExternalSecret + Secret, which is what every
 # spokes/ ApplicationSet's `clusters` generator uses to know this spoke
-# exists at all — while that's gone, nothing can recreate anything on the
+# exists at all - while that's gone, nothing can recreate anything on the
 # spoke, for as long as this workflow's own run takes (the guarantee window
 # closes once root-clusters resyncs, see above).
 #
@@ -34,15 +34,15 @@ name: k8s-deregister-from-hub
 # into a drain step that might still be racing ArgoCD.
 #
 # PVCs created via a StatefulSet's volumeClaimTemplate (Prometheus, Tempo
-# ingester) are NOT deleted by ArgoCD's Application prune — Kubernetes
+# ingester) are NOT deleted by ArgoCD's Application prune - Kubernetes
 # deliberately leaves those unowned so they survive pod/StatefulSet
 # recreation. After this workflow, they're simply idle (no pod holds them
-# anymore) — the existing drain-pvcs.sh.tpl step in destroy-spoke.yml is
+# anymore) - the existing drain-pvcs.sh.tpl step in destroy-spoke.yml is
 # what actually deletes them and triggers the EBS DeleteVolume calls, and
 # now runs risk-free.
 #
 # Reuses the ARGOCD_REGISTRATION_ROLE_ARN role already granted in
-# live/hub/main.tf for verify-spoke-registration.yml — no new IAM/Terraform
+# live/hub/main.tf for verify-spoke-registration.yml - no new IAM/Terraform
 # changes needed. That role already has everything this workflow needs:
 # ec2:DescribeInstances (find the hub master) and ssm:SendCommand /
 # GetCommandInvocation scoped to that instance. What actually happens on
@@ -64,7 +64,7 @@ on:
         type: string
         required: true
       hub_env:
-        description: "Hub environment, e.g. hub-dev — used to locate the hub master by its Name tag"
+        description: "Hub environment, e.g. hub-dev - used to locate the hub master by its Name tag"
         type: string
         required: true
       aws_region:
@@ -131,7 +131,7 @@ jobs:
 
       - name: Explain failure
         if: failure()
-        run: echo "::error::Deregistration ended with a non-success status (${{ steps.deregister.outputs.status }}) — the cluster may still be tracked by ArgoCD. Not safe to proceed with destroy."
+        run: echo "::error::Deregistration ended with a non-success status (${{ steps.deregister.outputs.status }}) - the cluster may still be tracked by ArgoCD. Not safe to proceed with destroy."
 
       - name: Show deregistration output
         if: always()

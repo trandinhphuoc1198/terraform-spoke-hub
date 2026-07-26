@@ -20,11 +20,11 @@ Each bucket name is suffixed with `-${env}` (e.g. `my-data-dev`, `my-data-prod`)
 
 **Force destroy**
 
-All buckets are created with `force_destroy = true`. This allows `terraform destroy` to succeed even if the bucket contains objects. This is intentional for dev/prod parity in a kubeadm cluster context where storage is ephemeral — but consider setting this to `false` and enabling versioning for buckets holding critical data.
+All buckets are created with `force_destroy = true`. This allows `terraform destroy` to succeed even if the bucket contains objects. This is intentional for dev/prod parity in a kubeadm cluster context where storage is ephemeral - but consider setting this to `false` and enabling versioning for buckets holding critical data.
 
 **For-each pattern**
 
-The module uses `for_each` over a `toset` of bucket names, which means each bucket is tracked individually in Terraform state. Adding a new name to the list creates only that bucket; removing one destroys only that bucket — no accidental recreation of existing buckets.
+The module uses `for_each` over a `toset` of bucket names, which means each bucket is tracked individually in Terraform state. Adding a new name to the list creates only that bucket; removing one destroys only that bucket - no accidental recreation of existing buckets.
 
 ---
 
@@ -33,7 +33,7 @@ The module uses `for_each` over a `toset` of bucket names, which means each buck
 | Name | Type | Description |
 |---|---|---|
 | `bucket_names` | `list(string)` | Base names for the S3 buckets. Each is suffixed with `-${env}` at creation time. |
-| `env` | `string` | Environment name — appended to every bucket name |
+| `env` | `string` | Environment name - appended to every bucket name |
 
 ---
 

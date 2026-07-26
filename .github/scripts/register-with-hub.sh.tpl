@@ -15,7 +15,7 @@ kubectl create clusterrolebinding argocd-manager-binding \
   --serviceaccount=argocd-manager:argocd-manager \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# ── Rotation script, installed on the host (not a k8s CronJob — see note
+# ── Rotation script, installed on the host (not a k8s CronJob - see note
 # in the PR/commit message on why: avoids relying on IMDS hop-limit being
 # locked down for pod-level credential isolation) ─────────────────────────
 cat <<ROTATE > /usr/local/bin/push-argocd-registration.sh

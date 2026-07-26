@@ -68,7 +68,7 @@ jobs:
         run: tflint --config ${{ github.workspace }}/.tflint.hcl
         working-directory: ${{ matrix.root }}
 
-  # Static checks only — no AWS credentials in CI, so this can't actually
+  # Static checks only - no AWS credentials in CI, so this can't actually
   # launch the build instance. `packer validate` catches HCL/syntax errors;
   # `ansible-lint` catches obvious playbook mistakes before merge.
   packer-validate:

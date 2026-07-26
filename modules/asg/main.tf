@@ -8,7 +8,7 @@
 resource "aws_launch_template" "worker" {
   name_prefix = "${var.env}-k8s-worker-"
   # AMI is the shared, Packer-built k8s base image (containerd/kubeadm/
-  # kubelet/kubectl + node prep baked in) — see /packer and modules/ami.
+  # kubelet/kubectl + node prep baked in) - see /packer and modules/ami.
   # Same image the master (modules/ec2) launches from. No dynamic SSM
   # lookup here anymore.
   image_id      = var.ami_id
@@ -78,7 +78,7 @@ resource "aws_autoscaling_group" "workers" {
     version = "$Latest"
   }
 
-  # Instance refresh — rolling update when launch template changes
+  # Instance refresh - rolling update when launch template changes
   # (including when a new Packer-built AMI shows up via modules/ami).
   instance_refresh {
     strategy = "Rolling"

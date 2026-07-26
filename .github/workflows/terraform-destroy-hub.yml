@@ -3,7 +3,7 @@ name: terraform-destroy-hub
 # Runs `terraform destroy` for live/hub. Split out of destroy-hub.yml so
 # destroy-all.yml can run this in parallel with terraform-destroy-spoke.yml
 # once both clusters have finished draining PVCs (see destroy-all.yml).
-# Assumes drain-hub-pvcs.yml already ran — this workflow does not enforce
+# Assumes drain-hub-pvcs.yml already ran - this workflow does not enforce
 # that itself, the caller does via `needs:`.
 #
 # The actual terraform init/plan -destroy/apply steps live in the shared

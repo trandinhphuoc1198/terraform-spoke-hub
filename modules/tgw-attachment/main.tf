@@ -46,7 +46,7 @@ resource "aws_route" "to_peer" {
 # in the TGW's shared default route table. Because every attachment here uses
 # transit_gateway_default_route_table_association = true (above), this one
 # static route makes this cluster's pod CIDR reachable from EVERY other
-# attached cluster automatically — adding a new spoke never requires touching
+# attached cluster automatically - adding a new spoke never requires touching
 # this resource on hub or any sibling spoke's state.
 resource "aws_ec2_transit_gateway_route" "own_pod_cidr" {
   transit_gateway_route_table_id = var.tgw_default_route_table_id
@@ -56,7 +56,7 @@ resource "aws_ec2_transit_gateway_route" "own_pod_cidr" {
 
 # ── Cluster Mesh: route the fleet pod-CIDR supernet to the TGW ───────────────
 # One route per local route table, pointing the ENTIRE fleet supernet at the
-# TGW — not a per-peer route. Any pod IP outside this cluster's own pod CIDR
+# TGW - not a per-peer route. Any pod IP outside this cluster's own pod CIDR
 # but inside the supernet is, by convention, some other cluster's pod CIDR;
 # the TGW then uses every cluster's self-registered static route above to
 # forward it to the right attachment.

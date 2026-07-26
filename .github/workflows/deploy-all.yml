@@ -5,7 +5,7 @@ name: deploy-all
 # deploy-network.yml, deploy-hub.yml, or deploy-spoke.yml directly instead.
 #
 # Why hub and spoke run in parallel here: live/spoke's terraform state has
-# no dependency on live/hub's — hub_vpc_cidr is a plain tfvar string, not a
+# no dependency on live/hub's - hub_vpc_cidr is a plain tfvar string, not a
 # terraform_remote_state read, and both only read global/network's state
 # (already applied by the time this job starts). So spoke's terraform
 # apply + kubeadm bootstrap + push-token-to-Secrets-Manager can all happen
@@ -19,7 +19,7 @@ name: deploy-all
 # that job explicitly needs both `hub` and `spoke-infra` to finish first.
 #
 # This replaces the old deploy-infra.yml, which mixed hub and spoke jobs
-# into one non-reusable DAG — that meant a spoke-only change always forced
+# into one non-reusable DAG - that meant a spoke-only change always forced
 # hub's bootstrap-argocd job to run too, and adding a second spoke meant
 # hand-duplicating four more jobs into that file. deploy-spoke.yml's
 # `spoke_dir` input solves the second problem; splitting into separate

@@ -45,7 +45,7 @@ check "no_cidr_overlap" {
 check "no_duplicate_cidrs" {
   assert {
     condition     = length(local.cidr_ranges) == length(concat([var.vpc_cidr], var.spoke_vpc_cidrs))
-    error_message = "vpc_cidr and spoke_vpc_cidrs contain an exact duplicate CIDR — each cluster needs a distinct VPC CIDR."
+    error_message = "vpc_cidr and spoke_vpc_cidrs contain an exact duplicate CIDR - each cluster needs a distinct VPC CIDR."
   }
 }
 
@@ -60,12 +60,12 @@ module "vpc" {
   cluster_name         = var.cluster_name
 }
 
-# ── Baked k8s base AMI (built by Packer + Ansible — see /packer) ─────────────
+# ── Baked k8s base AMI (built by Packer + Ansible - see /packer) ─────────────
 module "ami" {
   source = "../../modules/ami"
 }
 
-# ── Transit Gateway attachment — connects this VPC to every spoke VPC ────────
+# ── Transit Gateway attachment - connects this VPC to every spoke VPC ────────
 module "tgw_attachment" {
   source                     = "../../modules/tgw-attachment"
   env                        = var.env

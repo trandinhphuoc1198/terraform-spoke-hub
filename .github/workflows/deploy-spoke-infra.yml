@@ -2,19 +2,19 @@ name: deploy-spoke-infra
 
 # Spoke infra ONLY: terraform apply, kubeadm bootstrap, and pushing the
 # argocd-manager registration token to Secrets Manager. Deliberately stops
-# there — it does NOT verify the hub's Argo CD picked up the registration,
+# there - it does NOT verify the hub's Argo CD picked up the registration,
 # because that verification (verify-spoke-registration.yml) requires the hub's
 # master instance to exist and its Argo CD/ESO to be running, which this
 # workflow has no dependency on and shouldn't wait for.
 #
 # This split exists so deploy-all.yml can run this in parallel with
-# deploy-hub.yml (spoke's terraform state has no dependency on hub's —
+# deploy-hub.yml (spoke's terraform state has no dependency on hub's -
 # hub_vpc_cidr is a plain tfvar, not a remote-state read), then gate the
 # final verify-spoke-registration.yml verification on both finishing.
 #
 # For a single day-2 spoke change where you just want the full chain
 # (infra -> bootstrap -> register -> verify) in one run, use deploy-spoke.yml
-# instead — it calls this same infra chain plus the verify step, sequentially.
+# instead - it calls this same infra chain plus the verify step, sequentially.
 #
 # The actual terraform init/plan/apply steps live in the shared
 # terraform-apply.yml reusable workflow.
@@ -53,7 +53,7 @@ on:
         default: "workload"
     outputs:
       cluster_name:
-        description: "cluster_name output of the spoke's terraform root — needed by verify-spoke-registration.yml"
+        description: "cluster_name output of the spoke's terraform root - needed by verify-spoke-registration.yml"
         value: ${{ jobs.deploy-spoke.outputs.terraform_output_value }}
     secrets:
       AWS_DEPLOY_ROLE_ARN:
@@ -89,10 +89,10 @@ jobs:
     secrets: inherit
 
   # ── 3. push argocd-manager token to Secrets Manager + rotation timer ────
-  # Only touches Secrets Manager — no dependency on the hub cluster itself,
+  # Only touches Secrets Manager - no dependency on the hub cluster itself,
   # so this is safe to run before or during the hub's own bring-up.
   register-with-hub-spoke:
-    name: "register spoke with hub (secrets manager) — ${{ inputs.environment }}"
+    name: "register spoke with hub (secrets manager) - ${{ inputs.environment }}"
     needs: [bootstrap-cluster-spoke, deploy-spoke]
     uses: ./.github/workflows/k8s-register-with-hub.yml
     with:

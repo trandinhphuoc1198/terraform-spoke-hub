@@ -4,19 +4,19 @@ name: destroy-hub
 # does not touch global/network.
 #
 # Two phases, each its own reusable workflow, chained here for standalone
-# use — destroy-all.yml calls these same two workflows directly instead,
+# use - destroy-all.yml calls these same two workflows directly instead,
 # so it can interleave them with drain-spoke-pvcs.yml /
 # terraform-destroy-spoke.yml and run both clusters' terraform destroy in
 # parallel:
-#   1. drain-hub-pvcs — same PVC-drain rationale as destroy-spoke.yml (the
+#   1. drain-hub-pvcs - same PVC-drain rationale as destroy-spoke.yml (the
 #      hub can also run charts that provision EBS volumes dynamically via
 #      the aws-ebs-csi-driver, e.g. kube-prometheus-stack/Grafana if
 #      enabled on the hub, which Terraform never created).
-#   2. terraform-destroy-hub — removes the Terraform-managed infra itself.
+#   2. terraform-destroy-hub - removes the Terraform-managed infra itself.
 #
 # ⚠️ If any spoke is still registered against this hub's Argo CD, destroying
 # the hub first just means the spoke's registration goes stale (no
-# automated cleanup happens on the spoke side) — that's fine to do in
+# automated cleanup happens on the spoke side) - that's fine to do in
 # either order relative to destroy-spoke.yml, but destroy-network.yml must
 # run AFTER both this and destroy-spoke.yml (see that workflow's header
 # comment).

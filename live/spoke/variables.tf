@@ -17,7 +17,7 @@ variable "network_state_key" {
 }
 
 variable "cluster_name" {
-  description = "K8s cluster name — must match the ASG discovery tag value"
+  description = "K8s cluster name - must match the ASG discovery tag value"
   type        = string
 }
 
@@ -42,7 +42,7 @@ variable "private_subnet_cidrs" {
 }
 
 variable "hub_vpc_cidr" {
-  description = "CIDR of the hub VPC — used for the TGW route and to allow the hub's Argo CD to reach this cluster's kube-apiserver"
+  description = "CIDR of the hub VPC - used for the TGW route and to allow the hub's Argo CD to reach this cluster's kube-apiserver"
   type        = string
   validation {
     condition     = can(cidrnetmask(var.hub_vpc_cidr))
@@ -122,13 +122,13 @@ variable "bucket_names" {
 }
 
 variable "pod_cidr_supernet" {
-  description = "Fleet-wide pod-CIDR supernet — var.pod_cidr must fall inside this range for Cilium Cluster Mesh routing to work (see README)"
+  description = "Fleet-wide pod-CIDR supernet - var.pod_cidr must fall inside this range for Cilium Cluster Mesh routing to work (see README)"
   type        = string
   default     = "100.64.0.0/10"
 }
 
 variable "vpc_cidr_supernet" {
-  description = "Fleet-wide VPC-CIDR supernet — lets the clustermesh-apiserver NodePort SG rule admit traffic from any cluster without per-peer rules"
+  description = "Fleet-wide VPC-CIDR supernet - lets the clustermesh-apiserver NodePort SG rule admit traffic from any cluster without per-peer rules"
   type        = string
   default     = "10.0.0.0/8"
 }

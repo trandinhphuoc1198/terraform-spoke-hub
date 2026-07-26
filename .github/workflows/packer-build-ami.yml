@@ -1,6 +1,6 @@
 name: packer-build-ami
 
-# Manual trigger only — this actually launches a real EC2 build instance and
+# Manual trigger only - this actually launches a real EC2 build instance and
 # bakes/publishes an AMI, so it must never run on push/PR, only from the
 # GitHub UI (Actions tab → Run workflow).
 on:

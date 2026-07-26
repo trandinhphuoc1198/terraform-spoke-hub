@@ -27,7 +27,7 @@ on:
         type: string
         required: true
       environment:
-        description: "envs/<environment> folder to read backend.hcl (and, if use_var_file, terraform.tfvars) from — also used as the GitHub Environment name for deployment protection rules/secrets"
+        description: "envs/<environment> folder to read backend.hcl (and, if use_var_file, terraform.tfvars) from - also used as the GitHub Environment name for deployment protection rules/secrets"
         type: string
         required: true
       destroy:

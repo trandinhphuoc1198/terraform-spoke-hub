@@ -3,7 +3,7 @@ name: deploy-hub
 # Deploys/updates the hub cluster ONLY: live/hub terraform apply, kubeadm
 # bootstrap, then Argo CD install. Does not touch live/spoke and does not
 # re-apply global/network (it only reads that state via
-# terraform_remote_state — global/network must already exist; run
+# terraform_remote_state - global/network must already exist; run
 # deploy-network.yml first if this is a brand-new environment).
 #
 # Run this on its own for any hub-only change (instance type, worker

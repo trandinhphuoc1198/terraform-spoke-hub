@@ -11,12 +11,12 @@ variable "master_private_ip" {
 }
 
 variable "ami_id" {
-  description = "AMI ID for the master node — the shared Packer-built k8s base image (see /packer and modules/ami). Replaces the previous dynamic SSM AL2023 lookup."
+  description = "AMI ID for the master node - the shared Packer-built k8s base image (see /packer and modules/ami). Replaces the previous dynamic SSM AL2023 lookup."
   type        = string
 }
 
 # NOTE: k8s_bootstrap was removed. The master no longer self-bootstraps via
-# user_data — kubeadm init/CNI now runs via the k8s-cluster-bootstrap.yml
+# user_data - kubeadm init/CNI now runs via the k8s-cluster-bootstrap.yml
 # CI workflow (SSM send-command), using module.k8s.master_userdata as the
 # script content. This makes a failed bootstrap fail a CI job with logs,
 # instead of failing silently inside cloud-init on a box nobody's watching.
@@ -33,7 +33,7 @@ variable "trusted_api_cidr_blocks" {
 }
 
 variable "s3_bucket_arns" {
-  description = "ARNs of S3 buckets the worker IAM role should be able to read/write. Leave empty (default) if this cluster has no S3-backed workloads — e.g. the hub."
+  description = "ARNs of S3 buckets the worker IAM role should be able to read/write. Leave empty (default) if this cluster has no S3-backed workloads - e.g. the hub."
   type        = list(string)
   default     = []
 }
@@ -57,7 +57,7 @@ variable "master_volume_size" {
 }
 
 variable "pod_cidr_supernet" {
-  description = "Fleet-wide pod-CIDR supernet (default 100.64.0.0/10 — see README). Allowed as an ingress source on master/worker SGs so Cilium Cluster Mesh native-routed pod traffic from any other cluster isn't dropped at the node ENI."
+  description = "Fleet-wide pod-CIDR supernet (default 100.64.0.0/10 - see README). Allowed as an ingress source on master/worker SGs so Cilium Cluster Mesh native-routed pod traffic from any other cluster isn't dropped at the node ENI."
   type        = string
   default     = "100.64.0.0/10"
 }
@@ -69,7 +69,7 @@ variable "vpc_cidr_supernet" {
 }
 
 variable "clustermesh_nodeport" {
-  description = "NodePort the clustermesh-apiserver Service listens on — exposed to every other cluster in the fleet for Cilium Cluster Mesh"
+  description = "NodePort the clustermesh-apiserver Service listens on - exposed to every other cluster in the fleet for Cilium Cluster Mesh"
   type        = number
   default     = 32379
 }

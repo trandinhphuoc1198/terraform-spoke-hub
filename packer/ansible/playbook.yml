@@ -8,7 +8,7 @@
 #   kubeadm init/join, CNI, AWS CCM, the join-token SSM dance.
 #
 # The "disable source/dest check" systemd unit below IS fully generic and
-# baked here (unlike the above) even though it also runs at every boot —
+# baked here (unlike the above) even though it also runs at every boot -
 # see the comment on that task block for why.
 
 - name: Bake k8s base image
@@ -180,18 +180,18 @@
 
     # ── Disable source/dest check (Cilium native routing) ──────────────────
     # This one IS baked into the AMI, unlike kubeadm init/join/CCM above,
-    # because it's fully generic — "ask IMDS who I am, tell AWS to stop
+    # because it's fully generic - "ask IMDS who I am, tell AWS to stop
     # checking my source/dest" needs no per-cluster values (no join token,
     # no cluster name, nothing that only exists at Terraform-apply time).
     # Baking it means modules/k8s/templates/worker_init.sh.tpl doesn't
     # need to carry this logic at all; it runs identically on the master
-    # too (redundant with — but harmless alongside — the master's
+    # too (redundant with - but harmless alongside - the master's
     # declarative source_dest_check=false in modules/ec2/main.tf, since
     # aws_instance supports that argument directly and
     # aws_launch_template's network_interfaces block still doesn't:
     # hashicorp/terraform-provider-aws#29561).
     #
-    # Needs ec2:ModifyInstanceAttribute at runtime — see the
+    # Needs ec2:ModifyInstanceAttribute at runtime - see the
     # worker_self_manage IAM policy in modules/ec2/main.tf (master already
     # has this permission via master_ccm_policy's tag-scoped statement).
     - name: Install disable-source-dest-check script
@@ -239,7 +239,7 @@
         name: disable-source-dest-check.service
         enabled: true
         daemon_reload: true
-        # Not started here — no network/IAM role attached yet during the
+        # Not started here - no network/IAM role attached yet during the
         # Packer build. It runs for real on first boot of any instance
         # launched from this AMI (master and worker alike), per
         # WantedBy=multi-user.target above.

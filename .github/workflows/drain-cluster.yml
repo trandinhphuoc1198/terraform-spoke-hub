@@ -5,13 +5,13 @@ name: drain-cluster
 # before that cluster's infra is torn down.
 #
 # Replaces the previous drain-hub-pvcs.yml / drain-spoke-pvcs.yml, which
-# were identical except for a hardcoded working-directory — this takes it
+# were identical except for a hardcoded working-directory - this takes it
 # as an input instead. Called by destroy-hub.yml, destroy-spoke.yml, and
 # destroy-all.yml (in parallel, once per cluster).
 #
 # Must run AFTER k8s-deregister-from-hub.yml on a spoke (nodes/CSI driver
 # and CCM need to still be alive, and ArgoCD must no longer be able to
-# resurrect anything on that spoke while draining) — the hub has no
+# resurrect anything on that spoke while draining) - the hub has no
 # equivalent deregistration step, so it can run directly.
 #
 # Best-effort throughout: a stuck PVC or load balancer logs a warning
@@ -99,13 +99,13 @@ jobs:
             echo "online=true" >> "$GITHUB_OUTPUT"
           else
             echo "online=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::SSM agent not reachable on $INSTANCE_ID — skipping drain. \
+            echo "::warning::SSM agent not reachable on $INSTANCE_ID - skipping drain. \
             CSI-backed EBS volumes and CCM-provisioned load balancers may be orphaned. \
             Check the AWS Console after this run and delete manually if needed."
           fi
 
       # ── Freeze local ArgoCD (only set by callers whose cluster runs
-      #    ArgoCD itself — currently only live/hub) ──────────────────────
+      #    ArgoCD itself - currently only live/hub) ──────────────────────
       - name: Render ArgoCD freeze script
         if: steps.instance.outputs.id != '' && steps.ssm_check.outputs.online == 'true' && inputs.freeze_argocd_namespace != ''
         run: |
@@ -127,7 +127,7 @@ jobs:
       - name: Warn if ArgoCD freeze did not complete cleanly
         if: steps.freeze_argocd.outputs.status != '' && steps.freeze_argocd.outputs.status != 'Success'
         run: |
-          echo "::warning::ArgoCD freeze command ended with status ${{ steps.freeze_argocd.outputs.status }} — \
+          echo "::warning::ArgoCD freeze command ended with status ${{ steps.freeze_argocd.outputs.status }} - \
           selfHeal may still be active during this drain, risking a recreate race against deleted namespaces/Services."
 
       # ── LoadBalancer (NLB/ALB) drain ──────────────────────────────────
@@ -164,7 +164,7 @@ jobs:
       - name: Warn if PVC drain did not complete cleanly
         if: steps.drain_pvcs.outputs.status != '' && steps.drain_pvcs.outputs.status != 'Success'
         run: |
-          echo "::warning::PVC drain command ended with status ${{ steps.drain_pvcs.outputs.status }} — some volumes may \
+          echo "::warning::PVC drain command ended with status ${{ steps.drain_pvcs.outputs.status }} - some volumes may \
           not have been released cleanly. Check the AWS Console for leftover volumes \
           tagged ebs.csi.aws.com/cluster=true after this run."
 
@@ -179,7 +179,7 @@ jobs:
       - name: Warn if load balancer drain did not complete cleanly
         if: steps.drain_lb.outputs.status != '' && steps.drain_lb.outputs.status != 'Success'
         run: |
-          echo "::warning::Load balancer drain command ended with status ${{ steps.drain_lb.outputs.status }} — some \
+          echo "::warning::Load balancer drain command ended with status ${{ steps.drain_lb.outputs.status }} - some \
           NLBs/ALBs may not have been released cleanly. Check the AWS Console (ELBv2) for leftover \
           load balancers tagged kubernetes.io/cluster/${{ steps.cluster.outputs.name }}=owned after this run."
 

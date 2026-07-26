@@ -17,7 +17,7 @@ variable "network_state_key" {
 }
 
 variable "cluster_name" {
-  description = "K8s cluster name — must match the ASG discovery tag value"
+  description = "K8s cluster name - must match the ASG discovery tag value"
   type        = string
 }
 
@@ -32,7 +32,7 @@ variable "vpc_cidr" {
 }
 
 variable "spoke_vpc_cidrs" {
-  description = "CIDR block(s) of every spoke VPC this hub needs a TGW route + apiserver access to. Static, chosen up front to avoid a circular terraform_remote_state dependency between hub and spoke roots — add one entry per spoke as you bring more online."
+  description = "CIDR block(s) of every spoke VPC this hub needs a TGW route + apiserver access to. Static, chosen up front to avoid a circular terraform_remote_state dependency between hub and spoke roots - add one entry per spoke as you bring more online."
   type        = list(string)
   default     = []
 
@@ -117,13 +117,13 @@ variable "pod_cidr" {
 }
 
 variable "pod_cidr_supernet" {
-  description = "Fleet-wide pod-CIDR supernet — var.pod_cidr must fall inside this range for Cilium Cluster Mesh routing to work (see README)"
+  description = "Fleet-wide pod-CIDR supernet - var.pod_cidr must fall inside this range for Cilium Cluster Mesh routing to work (see README)"
   type        = string
   default     = "100.64.0.0/10"
 }
 
 variable "vpc_cidr_supernet" {
-  description = "Fleet-wide VPC-CIDR supernet — lets the clustermesh-apiserver NodePort SG rule admit traffic from any cluster without per-peer rules"
+  description = "Fleet-wide VPC-CIDR supernet - lets the clustermesh-apiserver NodePort SG rule admit traffic from any cluster without per-peer rules"
   type        = string
   default     = "10.0.0.0/8"
 }

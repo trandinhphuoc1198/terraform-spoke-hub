@@ -1,8 +1,8 @@
 name: k8s-bootstrap-argocd
 
-# Hub only — installs Argo CD via SSM send-command (day-0, one-time
+# Hub only - installs Argo CD via SSM send-command (day-0, one-time
 # imperative step; everything after this is Argo CD syncing from Git).
-# Also seeds the aws-creds Secret ESO needs — the one piece that can't
+# Also seeds the aws-creds Secret ESO needs - the one piece that can't
 # come from ESO itself. Runs once per hub environment, idempotent via
 # helm upgrade --install / kubectl apply. Called by deploy-hub.yml.
 #
@@ -28,7 +28,7 @@ on:
         type: string
         required: true
       env_name:
-        description: "Full env value, e.g. hub-dev — must match live/hub's var.env"
+        description: "Full env value, e.g. hub-dev - must match live/hub's var.env"
         type: string
         required: true
     secrets:

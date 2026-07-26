@@ -28,7 +28,7 @@ check "no_cidr_overlap" {
       local.cidr_ranges[var.vpc_cidr].start <= local.cidr_ranges[var.hub_vpc_cidr].end &&
       local.cidr_ranges[var.hub_vpc_cidr].start <= local.cidr_ranges[var.vpc_cidr].end
     )
-    error_message = "vpc_cidr (${var.vpc_cidr}) and hub_vpc_cidr (${var.hub_vpc_cidr}) overlap — they must be disjoint for TGW routing to work."
+    error_message = "vpc_cidr (${var.vpc_cidr}) and hub_vpc_cidr (${var.hub_vpc_cidr}) overlap - they must be disjoint for TGW routing to work."
   }
 }
 
@@ -43,12 +43,12 @@ module "vpc" {
   cluster_name         = var.cluster_name
 }
 
-# ── Baked k8s base AMI (built by Packer + Ansible — see /packer) ─────────────
+# ── Baked k8s base AMI (built by Packer + Ansible - see /packer) ─────────────
 module "ami" {
   source = "../../modules/ami"
 }
 
-# ── Transit Gateway attachment — connects this VPC to the hub VPC ────────────
+# ── Transit Gateway attachment - connects this VPC to the hub VPC ────────────
 module "tgw_attachment" {
   source                     = "../../modules/tgw-attachment"
   env                        = var.env

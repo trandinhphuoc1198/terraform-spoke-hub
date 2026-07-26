@@ -4,7 +4,7 @@ name: terraform-destroy-spoke
 # so destroy-all.yml can run this in parallel with terraform-destroy-hub.yml
 # once both clusters have finished draining PVCs (see destroy-all.yml).
 # Assumes drain-spoke-pvcs.yml (and, transitively, k8s-deregister-from-hub.yml)
-# already ran — this workflow does not enforce that itself, the caller does
+# already ran - this workflow does not enforce that itself, the caller does
 # via `needs:`.
 #
 # The actual terraform init/plan -destroy/apply steps live in the shared

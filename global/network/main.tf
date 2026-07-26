@@ -3,7 +3,7 @@
 # that neither hub nor spoke should be able to destroy/recreate as a side
 # effect of an unrelated change in their own root module.
 #
-# Apply this FIRST, before live/hub or live/spoke — both of those read its
+# Apply this FIRST, before live/hub or live/spoke - both of those read its
 # transit_gateway_id via a terraform_remote_state data source.
 
 resource "aws_ec2_transit_gateway" "main" {

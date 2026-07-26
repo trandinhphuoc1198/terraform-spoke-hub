@@ -16,14 +16,14 @@ resource "aws_security_group" "master" {
   description = "K8s master node"
   vpc_id      = var.vpc_id
 
-  # Bare group — all rules are managed as separate aws_vpc_security_group_
+  # Bare group - all rules are managed as separate aws_vpc_security_group_
   # {ingress,egress}_rule resources below, deliberately kept out of this
   # resource's own inline blocks. AWS Cloud Controller Manager also calls
   # AuthorizeSecurityGroupIngress/RevokeSecurityGroupIngress directly against
   # this same group at runtime (for LoadBalancer-type Services), outside
   # Terraform's control. Without ignore_changes here, the next `apply` would
   # see that externally-added rule as drift on this resource's computed
-  # ingress/egress attributes and try to revert it — even though the group
+  # ingress/egress attributes and try to revert it - even though the group
   # was declared bare. This ignore_changes is what lets CCM and Terraform
   # coexist on the same security group.
   lifecycle {
@@ -39,7 +39,7 @@ resource "aws_security_group" "worker" {
   description = "K8s worker nodes"
   vpc_id      = var.vpc_id
 
-  # See the comment on aws_security_group.master above — same rationale.
+  # See the comment on aws_security_group.master above - same rationale.
   lifecycle {
     ignore_changes = [ingress, egress]
   }
@@ -80,7 +80,7 @@ resource "aws_vpc_security_group_ingress_rule" "master_ingress_ssh" {
   tags = { Name = "${var.env}-master-ingress-ssh" }
 }
 
-# One rule per trusted CIDR (e.g. hub VPC via Transit Gateway) — the split
+# One rule per trusted CIDR (e.g. hub VPC via Transit Gateway) - the split
 # resource type only accepts a single cidr_ipv4 per rule, unlike the old
 # aws_security_group_rule's cidr_blocks list, so this is for_each'd instead
 # of the previous count-based single rule.
@@ -148,7 +148,7 @@ resource "aws_vpc_security_group_egress_rule" "worker_egress_all" {
 # ── Cluster Mesh: pod-to-pod traffic from any other cluster in the fleet ─────
 # Native-routing pod traffic terminates at the destination node's ENI (that's
 # what the TGW pod-CIDR-supernet route in modules/tgw-attachment points it
-# at), so the SG must explicitly allow it in. CIDR-based, not SG-referenced —
+# at), so the SG must explicitly allow it in. CIDR-based, not SG-referenced -
 # the peer's SG lives in a different VPC/account and can't be referenced
 # directly. Scoped to the fleet supernet, not per-peer, so adding a spoke
 # never requires touching this rule.
@@ -162,7 +162,7 @@ resource "aws_vpc_security_group_ingress_rule" "worker_ingress_clustermesh_pods"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "master_ingress_clustermesh_pods" {
-  description       = "Cross-cluster pod traffic (Cilium Cluster Mesh, native routing) — master isn't cordoned, it runs pods too"
+  description       = "Cross-cluster pod traffic (Cilium Cluster Mesh, native routing) - master isn't cordoned, it runs pods too"
   security_group_id = aws_security_group.master.id
   cidr_ipv4         = var.pod_cidr_supernet
   ip_protocol       = "-1"
@@ -172,7 +172,7 @@ resource "aws_vpc_security_group_ingress_rule" "master_ingress_clustermesh_pods"
 
 # ── Cluster Mesh: clustermesh-apiserver NodePort from any other cluster ──────
 # cilium-agent on a peer cluster connects with its node's real VPC IP
-# (hostNetwork), not a pod IP — scoped to the VPC-CIDR supernet, not the
+# (hostNetwork), not a pod IP - scoped to the VPC-CIDR supernet, not the
 # pod-CIDR supernet above.
 resource "aws_vpc_security_group_ingress_rule" "worker_ingress_clustermesh_apiserver" {
   description       = "clustermesh-apiserver NodePort, reachable from every cluster in the fleet"
@@ -289,7 +289,7 @@ resource "aws_iam_role_policy" "master_ccm_policy" {
       {
         # ELB resource-level/tag-conditioned IAM isn't consistently supported
         # across Classic ELB vs ALB/NLB APIs, so unlike the EC2 statements
-        # above this stays Resource = "*" — matches AWS's own documented
+        # above this stays Resource = "*" - matches AWS's own documented
         # IAM policy for cloud-provider-aws.
         Sid    = "ELBManageForCCMProvisionedLoadBalancers"
         Effect = "Allow"
@@ -376,7 +376,7 @@ resource "aws_iam_role_policy_attachment" "worker_ssm" {
 #
 # This only actually narrows access if whatever creates the volume/snapshot
 # (the in-tree AWS EBS provisioner or the aws-ebs-csi-driver) is configured
-# to tag what it creates with this same key/value — e.g. via the CSI
+# to tag what it creates with this same key/value - e.g. via the CSI
 # driver's --extra-tags flag or --k8s-tag-cluster-id. If that's not
 # configured, CreateVolume/CreateSnapshot calls tagged with something else
 # (or untagged) will simply fail closed rather than silently being broad,
@@ -409,7 +409,7 @@ resource "aws_iam_role_policy" "worker_ebs" {
             StringEquals = { "aws:RequestTag/ebs.csi.aws.com/cluster" = "true" }
           }
         },
-        # NEW — Attach/Detach need permission on the INSTANCE side too,
+        # NEW - Attach/Detach need permission on the INSTANCE side too,
         # and instances aren't tagged with ebs.csi.aws.com/cluster, so this
         # can't carry that condition. Scope it to this cluster's own
         # instances via the tag the ASG *does* apply instead.
@@ -523,7 +523,7 @@ resource "aws_iam_instance_profile" "worker" {
 # ── Master node ────────────────────────────────────────────────────────────────
 resource "aws_instance" "master" {
   # AMI is the shared, Packer-built k8s base image (containerd/kubeadm/
-  # kubelet/kubectl + node prep baked in) — see /packer and modules/ami.
+  # kubelet/kubectl + node prep baked in) - see /packer and modules/ami.
   #
   # NOTE: no user_data here anymore. kubelet is enabled by the AMI but sits
   # idle (no /etc/kubernetes/kubelet.conf yet) until the k8s-cluster-bootstrap.yml
@@ -532,7 +532,7 @@ resource "aws_instance" "master" {
   # bootstrap fail a CI job with logs, instead of failing silently inside
   # cloud-init. See modules/k8s/README.md.
   #
-  # Master lives in a private subnet, same as workers — no public IP.
+  # Master lives in a private subnet, same as workers - no public IP.
   # Reached exclusively via SSM Session Manager (see the unconditional
   # aws_iam_role_policy_attachment.master_ssm above); SSH stays available
   # only as a VPC-internal fallback (see master_ingress_ssh above).
