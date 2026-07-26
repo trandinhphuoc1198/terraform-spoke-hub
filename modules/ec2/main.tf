@@ -162,7 +162,7 @@ resource "aws_vpc_security_group_ingress_rule" "worker_ingress_clustermesh_pods"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "master_ingress_clustermesh_pods" {
-  description       = "Cross-cluster pod traffic (Cilium Cluster Mesh, native routing) - master isn't cordoned, it runs pods too"
+  description       = "Cross-cluster pod traffic (Cilium Cluster Mesh, native routing), master runs pods too (not cordoned)"
   security_group_id = aws_security_group.master.id
   cidr_ipv4         = var.pod_cidr_supernet
   ip_protocol       = "-1"
