@@ -24,10 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: packer-build   # optional: gate with required reviewers in repo settings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.PACKER_AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}

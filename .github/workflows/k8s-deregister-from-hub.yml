@@ -83,7 +83,7 @@ jobs:
     name: "deregister from hub argocd (${{ inputs.spoke_dir }}, ${{ inputs.environment }})"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Read cluster_name from tfvars
         id: cluster
@@ -97,7 +97,7 @@ jobs:
           echo "Resolved cluster_name: $NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.ARGOCD_REGISTRATION_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}

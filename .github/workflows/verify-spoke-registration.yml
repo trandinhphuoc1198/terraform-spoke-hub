@@ -64,7 +64,7 @@ jobs:
   verify-registration:
     runs-on: ubuntu-latest
     steps:
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.ARGOCD_REGISTRATION_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}

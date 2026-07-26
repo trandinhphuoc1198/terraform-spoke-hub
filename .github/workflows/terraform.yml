@@ -16,8 +16,8 @@ jobs:
   fmt-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.0"
       - name: terraform fmt (check only, no changes)
@@ -32,8 +32,8 @@ jobs:
       matrix:
         root: [global/network, live/hub, live/spoke]
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.0"
 
@@ -53,7 +53,7 @@ jobs:
       matrix:
         root: [global/network, live/hub, live/spoke]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: "v0.53.0"
@@ -74,7 +74,7 @@ jobs:
   packer-validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: hashicorp/setup-packer@main
         with:
           version: "1.11.0"
@@ -104,7 +104,7 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: trivy config scan
         uses: aquasecurity/trivy-action@master
         with:
