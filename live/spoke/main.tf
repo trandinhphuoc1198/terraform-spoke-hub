@@ -69,6 +69,7 @@ module "k8s" {
   pod_cidr          = var.pod_cidr
   env               = var.env
   pod_cidr_supernet = var.pod_cidr_supernet
+  install_cni_ccm   = false # Argo CD (hub) installs CNI/CCM after this spoke registers
 }
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────

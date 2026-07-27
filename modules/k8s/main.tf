@@ -4,6 +4,7 @@ output "master_userdata" {
     pod_cidr          = var.pod_cidr
     pod_cidr_supernet = var.pod_cidr_supernet
     env               = var.env
+    install_cni_ccm   = var.install_cni_ccm
   })
 }
 

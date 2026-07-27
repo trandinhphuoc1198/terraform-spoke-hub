@@ -23,6 +23,10 @@ on:
       aws_region:
         type: string
         required: true
+      install_cni_ccm:
+        description: "Must match the working root's install_cni_ccm - true for hub (node reaches Ready at bootstrap), false for spokes (Argo CD installs CNI/CCM later; verify apiserver health instead of node Ready)"
+        type: boolean
+        default: true
     secrets:
       AWS_DEPLOY_ROLE_ARN:
         required: true
@@ -103,6 +107,7 @@ jobs:
             --query "StandardErrorContent" --output text
 
       - name: Verify master node is Ready
+        if: ${{ inputs.install_cni_ccm }}
         run: |
           CMD_ID=$(aws ssm send-command \
             --instance-ids "${{ steps.instance.outputs.id }}" \
@@ -113,3 +118,16 @@ jobs:
           aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}" \
             --query StandardOutputContent --output text | tee node_status.txt
           grep -q " Ready" node_status.txt || (echo "::error::master node did not reach Ready" && exit 1)
+
+      - name: Verify apiserver is reachable (spoke - node stays NotReady until Argo CD installs CNI/CCM)
+        if: ${{ !inputs.install_cni_ccm }}
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.instance.outputs.id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["KUBECONFIG=/home/ec2-user/.kube/config kubectl get --raw=/readyz"]' \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ steps.instance.outputs.id }}" \
+            --query StandardOutputContent --output text | tee apiserver_status.txt
+          grep -q "^ok$" apiserver_status.txt || (echo "::error::spoke apiserver did not report ready" && exit 1)

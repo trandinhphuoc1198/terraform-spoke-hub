@@ -86,6 +86,7 @@ jobs:
       working_directory: ${{ inputs.spoke_dir }}
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
+      install_cni_ccm: false
     secrets: inherit
 
   # ── 3. push argocd-manager token to Secrets Manager + rotation timer ────

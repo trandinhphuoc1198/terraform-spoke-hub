@@ -59,6 +59,7 @@ jobs:
       working_directory: live/hub
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
+      install_cni_ccm: true
     secrets: inherit
 
   # ── 3. Argo CD install (hub only, one-time/idempotent) ──────────────────
