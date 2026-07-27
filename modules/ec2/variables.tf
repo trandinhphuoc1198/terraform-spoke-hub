@@ -73,3 +73,9 @@ variable "clustermesh_nodeport" {
   type        = number
   default     = 32379
 }
+
+variable "install_clustermesh_ca_push" {
+  description = "If true, grants master + worker node roles secretsmanager write access (CreateSecret/PutSecretValue/DescribeSecret/TagResource) scoped to clustermesh/* - needed for platform/clustermesh/hub/ca-pushsecret.yaml to push the CA to Secrets Manager via ESO PushSecret. Hub only; every spoke's ExternalSecret only needs read, already covered elsewhere."
+  type        = bool
+  default     = false
+}

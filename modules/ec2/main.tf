@@ -640,3 +640,52 @@ resource "aws_iam_role_policy" "master_read_eso_bootstrap" {
     }]
   })
 }
+
+# ── Hub → push clustermesh CA to Secrets Manager (ESO PushSecret) ────────────
+# See platform/clustermesh/hub/ca-pushsecret.yaml - the controller pod
+# (cert-manager namespace) authenticates as whichever node it's scheduled
+# on, so this is granted on BOTH master and worker roles rather than
+# assuming placement. Scoped to the clustermesh/ prefix only - distinct
+# from argocd-clusters/* (install_eso) and argocd-clusters/<name>-*
+# (register_with_hub), and from a genuine write, not a read.
+resource "aws_iam_role_policy" "master_clustermesh_ca_push" {
+  count = var.install_clustermesh_ca_push ? 1 : 0
+  name  = "${var.env}-k8s-master-clustermesh-ca-push-policy"
+  role  = aws_iam_role.master.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "PushClustermeshCA"
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:TagResource"
+      ]
+      Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:clustermesh/*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "worker_clustermesh_ca_push" {
+  count = var.install_clustermesh_ca_push ? 1 : 0
+  name  = "${var.env}-k8s-worker-clustermesh-ca-push-policy"
+  role  = aws_iam_role.worker.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "PushClustermeshCA"
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:TagResource"
+      ]
+      Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:clustermesh/*"
+    }]
+  })
+}
