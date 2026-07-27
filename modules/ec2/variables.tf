@@ -79,3 +79,9 @@ variable "install_clustermesh_ca_push" {
   type        = bool
   default     = false
 }
+
+variable "install_clustermesh_ca_pull" {
+  description = "If true, grants master + worker node roles secretsmanager:GetSecretValue and DescribeSecret, scoped to clustermesh/*. Needed for platform/clustermesh/spoke/external-secret.yaml to pull the CA hub/ca-pushsecret.yaml pushed to Secrets Manager. Spoke only - read-only, mirrors hub's install_clustermesh_ca_push but without any write actions."
+  type        = bool
+  default     = false
+}

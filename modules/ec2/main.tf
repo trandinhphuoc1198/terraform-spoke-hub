@@ -670,3 +670,28 @@ resource "aws_iam_role_policy" "worker_clustermesh_ca_push" {
     }]
   })
 }
+
+# ── Spoke → pull clustermesh CA from Secrets Manager (ESO ExternalSecret) ────
+# See platform/clustermesh/spoke/external-secret.yaml. Same "which node did
+# the ESO controller land on" uncertainty as the hub's push side, so
+# granted on both master and worker roles rather than assuming placement.
+# Read-only mirror of install_clustermesh_ca_push - no Create/Put/Tag here.
+
+resource "aws_iam_role_policy" "worker_clustermesh_ca_pull" {
+  count = var.install_clustermesh_ca_pull ? 1 : 0
+  name  = "${var.env}-k8s-worker-clustermesh-ca-pull-policy"
+  role  = aws_iam_role.worker.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "PullClustermeshCA"
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+      ]
+      Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:clustermesh/*"
+    }]
+  })
+}

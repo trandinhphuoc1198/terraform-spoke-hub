@@ -73,23 +73,24 @@ module "k8s" {
 
 # ── EC2: master node + shared IAM/SG resources ────────────────────────────────
 module "ec2" {
-  source                  = "../../modules/ec2"
-  env                     = var.env
-  vpc_id                  = module.vpc.vpc_id
-  vpc_cidr                = var.vpc_cidr
-  private_subnet_ids      = module.vpc.private_subnet_ids
-  master_instance_type    = var.master_instance_type
-  key_name                = var.key_name
-  master_private_ip       = var.master_private_ip
-  master_volume_size      = var.master_volume_size
-  cluster_name            = var.cluster_name
-  ami_id                  = module.ami.ami_id
-  trusted_api_cidr_blocks = [var.hub_vpc_cidr]
-  s3_bucket_arns          = module.s3.bucket_arns
-  register_with_hub       = true
-  pod_cidr_supernet       = var.pod_cidr_supernet
-  vpc_cidr_supernet       = var.vpc_cidr_supernet
-  clustermesh_nodeport    = var.clustermesh_nodeport
+  source                      = "../../modules/ec2"
+  env                         = var.env
+  vpc_id                      = module.vpc.vpc_id
+  vpc_cidr                    = var.vpc_cidr
+  private_subnet_ids          = module.vpc.private_subnet_ids
+  master_instance_type        = var.master_instance_type
+  key_name                    = var.key_name
+  master_private_ip           = var.master_private_ip
+  master_volume_size          = var.master_volume_size
+  cluster_name                = var.cluster_name
+  ami_id                      = module.ami.ami_id
+  trusted_api_cidr_blocks     = [var.hub_vpc_cidr]
+  s3_bucket_arns              = module.s3.bucket_arns
+  register_with_hub           = true
+  install_clustermesh_ca_pull = true
+  pod_cidr_supernet           = var.pod_cidr_supernet
+  vpc_cidr_supernet           = var.vpc_cidr_supernet
+  clustermesh_nodeport        = var.clustermesh_nodeport
 }
 
 # ── ASG: worker node Auto Scaling Group ───────────────────────────────────────
