@@ -34,9 +34,14 @@ lifecycle {
 
 This prevents Terraform from reverting the autoscaler's scaling decisions on subsequent applies.
 
-### ALB target registration
+### No ALB target registration today
 
-The `alb` module uses an `aws_autoscaling_attachment` to register this ASG with the ALB target group. New worker instances are automatically added to the target group when they launch, and deregistered when they terminate. No manual target registration is needed.
+There is currently no `aws_autoscaling_attachment` wiring this ASG to an
+ALB target group - `modules/alb` exists in the repo but isn't instantiated
+by `live/hub` or `live/spoke` (see the root README's "Ingress note"). If
+you re-add an ALB in front of a cluster, you'll need to add both the
+attachment here and the corresponding worker security-group ingress rule
+in `modules/ec2` (also currently absent).
 
 ### IMDSv2 enforcement
 
@@ -44,17 +49,27 @@ The Launch Template sets `http_tokens = "required"` to enforce IMDSv2 on all wor
 
 ### AMI
 
-Workers use the same AL2023 minimal AMI as the master, resolved dynamically at apply time via the SSM public path.
+Workers use the shared Packer-built k8s base AMI (see `/packer` and
+`modules/ami`), resolved once per apply and shared with the master
+(`modules/ec2`) - not a dynamic per-boot SSM lookup.
 
 ### EBS volume
 
 Each worker gets a single root gp3 EBS volume. Volume size is configurable via `worker_volume_size` (default 20 GB). `delete_on_termination = true` ensures no orphaned volumes are left behind when the ASG scales in.
 
-### Worker bootstrap and NodePorts
+### Instance refresh
 
-The worker bootstrap script configures the system to expose two main NodePorts for application traffic:
-- **HTTP NodePort**: 30080 (used by ALB for HTTP traffic or health checks)
-- **HTTPS NodePort**: 30443 (used by ALB for HTTPS traffic via NGINX Ingress)
+`instance_refresh { strategy = "Rolling" }` rolls existing workers when the
+launch template changes - including when a new Packer-built AMI shows up
+via `modules/ami` - no manual drain/terminate needed.
+
+### Worker bootstrap
+
+`k8s_worker_bootstrap` (from `modules/k8s`'s `worker_userdata` output)
+polls SSM for the join token pushed by the master, then runs `kubeadm
+join`. It does not itself configure any Service NodePorts - NodePort
+Services/Ingress are a Kubernetes-level concern deployed later by Argo CD,
+independent of this Terraform module.
 
 ---
 
@@ -69,12 +84,12 @@ The worker bootstrap script configures the system to expose two main NodePorts f
 | `worker_sg_id` | `string` | - | Security group ID applied to all worker instances (from `ec2` module) |
 | `worker_iam_instance_profile_name` | `string` | - | IAM instance profile for workers (from `ec2` module) |
 | `k8s_worker_bootstrap` | `string` | - | Worker `user_data` script (from `k8s` module output) |
+| `ami_id` | `string` | - | Shared Packer-built k8s base AMI ID (from `modules/ami`) |
 | `worker_min` | `number` | `1` | Minimum number of worker nodes |
 | `worker_max` | `number` | `10` | Maximum number of worker nodes |
 | `worker_desired` | `number` | `2` | Initial desired count (managed by Cluster Autoscaler after first apply) |
 | `worker_volume_size` | `number` | `20` | Root EBS volume size in GB |
 | `cluster_name` | `string` | - | Kubernetes cluster name - embedded in ASG auto-discovery tags |
-| `https_nodeport` | `number` | `30443` | HTTPS NodePort that the ALB target groups forward to (for NGINX Ingress HTTPS) |
 
 ---
 
@@ -82,5 +97,5 @@ The worker bootstrap script configures the system to expose two main NodePorts f
 
 | Name | Description |
 |---|---|
-| `asg_name` | Name of the Auto Scaling Group - passed to the `alb` module for target group attachment, and useful as input to Cluster Autoscaler Helm values |
+| `asg_name` | Name of the Auto Scaling Group - useful as input to Cluster Autoscaler Helm values |
 | `launch_template_id` | ID of the worker Launch Template |
