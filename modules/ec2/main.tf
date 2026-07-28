@@ -215,6 +215,24 @@ resource "aws_vpc_security_group_ingress_rule" "worker_ingress_clustermesh_apise
   tags = { Name = "${var.env}-worker-ingress-clustermesh-apiserver" }
 }
 
+# ── Cluster Mesh: clustermesh-apiserver NodePort, master side ────────────
+# The cluster's mesh.cilium.io hostAlias points at the master's static
+# private IP (master_private_ip), not a worker - so the master SG needs
+# this ingress too, mirroring worker_ingress_clustermesh_apiserver above.
+# Confirmed via `clustermesh-apiserver kvstoremesh-dbg troubleshoot`:
+# TCP dial to <master_ip>:<clustermesh_nodeport> timed out (SG-blocked,
+# not TLS/cert - those never got a chance to negotiate).
+resource "aws_vpc_security_group_ingress_rule" "master_ingress_clustermesh_apiserver" {
+  description       = "clustermesh-apiserver NodePort, reachable from every cluster in the fleet"
+  security_group_id = aws_security_group.master.id
+  cidr_ipv4         = var.vpc_cidr_supernet
+  from_port         = var.clustermesh_nodeport
+  to_port           = var.clustermesh_nodeport
+  ip_protocol       = "tcp"
+
+  tags = { Name = "${var.env}-master-ingress-clustermesh-apiserver" }
+}
+
 # ── IAM role: master ───────────────────────────────────────────────────────────
 resource "aws_iam_role" "master" {
   name = "${var.env}-k8s-master-role"
