@@ -170,6 +170,36 @@ resource "aws_vpc_security_group_ingress_rule" "master_ingress_clustermesh_pods"
   tags = { Name = "${var.env}-master-ingress-clustermesh-pods" }
 }
 
+# ── Cluster Mesh: WireGuard-encapsulated pod traffic between clusters ────
+# encryption.type=wireguard (master_init.sh.tpl) re-wraps ALL inter-node
+# pod traffic as UDP/51871 between the nodes' real IPs (cilium_wg0) -
+# see https://docs.cilium.io/en/stable/security/network/encryption-wireguard/.
+# Intra-cluster this is already covered by the SG-reference rules below
+# (worker_ingress_self, master_ingress_from_worker, etc - "-1" from a
+# peer SG ID covers any protocol, including WireGuard). Cross-cluster
+# there's no SG to reference, so it needs its own CIDR-scoped rule -
+# clustermesh_pods (scoped to pod_cidr_supernet) never matches this
+# traffic, because the wire-level source is the node's real IP, not the
+# original pod IP.
+locals {
+  clustermesh_wireguard_sgs = {
+    worker = aws_security_group.worker.id
+    master = aws_security_group.master.id
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "clustermesh_wireguard" {
+  for_each          = local.clustermesh_wireguard_sgs
+  description       = "Cilium WireGuard tunnel (cilium_wg0), fleet-wide - encrypts cross-cluster pod traffic"
+  security_group_id = each.value
+  cidr_ipv4         = var.vpc_cidr_supernet
+  from_port         = 51871
+  to_port           = 51871
+  ip_protocol       = "udp"
+
+  tags = { Name = "${var.env}-${each.key}-ingress-clustermesh-wireguard" }
+}
+
 # ── Cluster Mesh: clustermesh-apiserver NodePort from any other cluster ──────
 # cilium-agent on a peer cluster connects with its node's real VPC IP
 # (hostNetwork), not a pod IP - scoped to the VPC-CIDR supernet, not the
