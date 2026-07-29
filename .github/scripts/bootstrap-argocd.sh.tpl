@@ -46,6 +46,7 @@ echo "=== Applying Argo CD bootstrap manifests from gitops repo ==="
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/projects/platform-infra.yaml"
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/projects/platform-apps.yaml"
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/projects/platform-hub.yaml"
+kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/projects/platform-hub-observability.yaml"
 
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/root-apps/root-hub.yaml"
 kubectl apply -f "$GITOPS_REPO_RAW_URL/argocd/root-apps/root-spokes.yaml"
