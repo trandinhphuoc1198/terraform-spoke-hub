@@ -26,3 +26,8 @@ master_volume_size = 20
 
 k8s_version = "1.33.2"
 pod_cidr    = "100.64.0.0/16"
+
+bucket_names = [
+  "tempo-s3-phuoctd6",
+  "log-s3-phuoctd6"
+]

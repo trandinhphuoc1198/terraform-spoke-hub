@@ -102,6 +102,7 @@ module "ec2" {
   master_volume_size          = var.master_volume_size
   cluster_name                = var.cluster_name
   ami_id                      = module.ami.ami_id
+  s3_bucket_arns              = module.s3.bucket_arns
   install_eso                 = true
   install_clustermesh_ca_push = true
   pod_cidr_supernet           = var.pod_cidr_supernet
@@ -127,6 +128,13 @@ module "asg" {
   ami_id                           = module.ami.ami_id
 
   depends_on = [module.vpc]
+}
+
+# ── S3 Buckets ─────────────────────────────────────────────────────────────────
+module "s3" {
+  source       = "../../modules/s3"
+  bucket_names = var.bucket_names
+  env          = var.env
 }
 
 # ── IAM role assumed by the verify-spoke-registration.yml GitHub Actions workflow ─

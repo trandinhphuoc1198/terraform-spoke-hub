@@ -114,12 +114,6 @@ variable "pod_cidr" {
   default     = "192.168.0.0/16"
 }
 
-# ── S3 ────────────────────────────────────────────────────────────────────────
-variable "bucket_names" {
-  description = "Base names for S3 buckets provisioned for this cluster's workloads; each is suffixed with -<env>"
-  type        = list(string)
-  default     = []
-}
 
 variable "pod_cidr_supernet" {
   description = "Fleet-wide pod-CIDR supernet - var.pod_cidr must fall inside this range for Cilium Cluster Mesh routing to work (see README)"

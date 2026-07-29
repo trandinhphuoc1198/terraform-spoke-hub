@@ -86,7 +86,6 @@ module "ec2" {
   cluster_name                = var.cluster_name
   ami_id                      = module.ami.ami_id
   trusted_api_cidr_blocks     = [var.hub_vpc_cidr]
-  s3_bucket_arns              = module.s3.bucket_arns
   register_with_hub           = true
   install_clustermesh_ca_pull = true
   pod_cidr_supernet           = var.pod_cidr_supernet
@@ -114,9 +113,3 @@ module "asg" {
   depends_on = [module.vpc]
 }
 
-# ── S3 Buckets ─────────────────────────────────────────────────────────────────
-module "s3" {
-  source       = "../../modules/s3"
-  bucket_names = var.bucket_names
-  env          = var.env
-}

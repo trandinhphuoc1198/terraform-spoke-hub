@@ -133,3 +133,10 @@ variable "clustermesh_nodeport" {
   type        = number
   default     = 32379
 }
+
+# ── S3 ────────────────────────────────────────────────────────────────────────
+variable "bucket_names" {
+  description = "Base names for S3 buckets provisioned for this cluster's workloads; each is suffixed with -<env>"
+  type        = list(string)
+  default     = []
+}
